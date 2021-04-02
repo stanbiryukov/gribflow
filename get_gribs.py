@@ -32,11 +32,11 @@ async def fetch_all(session, urls):
     return results
 
 
-def create_grib_idx_url_path(date: datetime, forecast_hour: int):
+def create_grib_idx_url_path(timestamp: datetime, forecast_hour: int):
     """
     Given a date and forecast hour return the expected grib.idx filepath on the open data S3 bucket for HRRR `wrfsubh` file.
     """
-    return f"https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date.year:04d}{date.month:02d}{date.day:02d}/conus/hrrr.t{date.hour:02d}z.wrfsubhf{str(forecast_hour).zfill(2)}.grib2.idx"
+    return f"https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/conus/hrrr.t{timestamp.hour:02d}z.wrfsubhf{str(forecast_hour).zfill(2)}.grib2.idx"
 
 
 def parse_to_df(r):
@@ -77,6 +77,7 @@ def get_byte_ranges(dlocs: pd.DataFrame, dparsed: pd.DataFrame):
 
 
 def download_grib_chunk(url: str, path: str, _range=None):
+    print(f"Fetching: {url} with byte header: {_range} and saving to: {path}")
     req = urllib.request.Request(url, method="GET")
     if _range:
         req.add_header("Range", _range)  # 'bytes=b0-b1)'
@@ -92,7 +93,7 @@ def download_files(idx_url, out_dir: str, cfg: List):
     [
         download_grib_chunk(
             url=idx_url.replace(".idx", ""),
-            path=f"{out_dir}/{idx_url.replace('/', '').replace('.grib2.idx', '')}_{x[0][0].strip()}_{x[0][1].strip()}_{''.join(x[0][2]).replace(' ','_').strip()}.grib2",
+            path=f"{out_dir}/{'_'.join(idx_url.rsplit('/')[-3:]).replace('.grib2.idx', '')}_{x[0][0].strip()}_{x[0][1].strip()}_{''.join(x[0][2]).replace(' ','_').strip()}.grib2",
             _range=f"bytes={x[1][0]}-{x[1][1]}",
         )
         for x in cfg
@@ -101,7 +102,7 @@ def download_files(idx_url, out_dir: str, cfg: List):
 
 async def main(args):
     idx_url = create_grib_idx_url_path(
-        date=pd.to_datetime(args.date, utc=True), forecast_hour=args.forecast_hour
+        timestamp=pd.to_datetime(args.timestamp, utc=True), forecast_hour=args.forecast_hour
     )
     async with aiohttp.ClientSession() as session:
         r = await fetch(session, idx_url)
@@ -114,9 +115,13 @@ async def main(args):
 
 
 if __name__ == "__main__":
+    '''
+    Fetch subsets of HRRR sub-hourly forecast outputs.
+        ex: # python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -forecast_hour 6 -variable 'PRATE' -level 'surface' -out_dir '/tmp'
+    '''
     parser = argparse.ArgumentParser(description="HRRR Grib downloader")
-    parser.add_argument("-date", type=str, help="HRRR UTC mode run date to query")
-    parser.add_argument("-forecast_hour", type=int, help="HRRR forecast hour to query")
+    parser.add_argument("-timestamp", type=str, help="HRRR UTC date and time run to query, ie: '2021-03-30 03:15:00Z' ")
+    parser.add_argument("-forecast_hour", type=int, help="HRRR forecast hour of model run to query")
     parser.add_argument(
         "-variable",
         default="PRATE",
