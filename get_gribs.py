@@ -72,11 +72,12 @@ def get_byte_ranges(dlocs: pd.DataFrame, dparsed: pd.DataFrame):
     byte range is that row index's first column and ends with the next row's byte start.
     """
     return [
-        (dparsed.iloc[r[0]][1], dparsed.iloc[r[0] + 1][1]) for r in dlocs.iterrows()
+        (dparsed.loc[r][1], dparsed.loc[r + 1][1]) for r in dlocs.index
     ]
 
 
 def download_grib_chunk(url: str, path: str, _range=None):
+    # print(f"Fetching: {url} with byte header: {_range} and saving to: {path}")
     req = urllib.request.Request(url, method="GET")
     if _range:
         req.add_header("Range", _range)  # 'bytes=b0-b1)'
