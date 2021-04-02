@@ -1,16 +1,19 @@
+import argparse
+import asyncio
 import datetime
 import io
 import shutil
 import urllib
 from typing import List
-import argparse
 
 import aiohttp
-import asyncio
 import pandas as pd
 
 
 async def fetch(session, url):
+    """
+    Create aiohttp request.
+    """
     async with session.get(url) as response:
         if response.status != 200:
             response.raise_for_status()
@@ -18,6 +21,9 @@ async def fetch(session, url):
 
 
 async def fetch_all(session, urls):
+    """
+    Create aiohttp requests for multiple urls.
+    """
     tasks = []
     for url in urls:
         task = asyncio.create_task(fetch(session, url))
@@ -27,6 +33,9 @@ async def fetch_all(session, urls):
 
 
 def create_grib_idx_url_path(date: datetime, forecast_hour: int):
+    """
+    Given a date and forecast hour return the expected grib.idx filepath on the open data S3 bucket for HRRR `wrfsubh` file.
+    """
     return f"https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date.year:04d}{date.month:02d}{date.day:02d}/conus/hrrr.t{date.hour:02d}z.wrfsubhf{str(forecast_hour).zfill(2)}.grib2.idx"
 
 
@@ -78,19 +87,22 @@ def download_grib_chunk(url: str, path: str, _range=None):
 
 def download_files(idx_url, out_dir: str, cfg: List):
     """
-    Create curl requests and save a unique filename based on metadata.
+    Download the files and save a unique filename based on metadata collected.
     """
     [
         download_grib_chunk(
-            url=idx_url.replace('.idx', ''),
+            url=idx_url.replace(".idx", ""),
             path=f"{out_dir}/{idx_url.replace('/', '').replace('.grib2.idx', '')}_{x[0][0].strip()}_{x[0][1].strip()}_{''.join(x[0][2]).replace(' ','_').strip()}.grib2",
             _range=f"bytes={x[1][0]}-{x[1][1]}",
         )
         for x in cfg
     ]
 
-async def main(args):    
-    idx_url = create_grib_idx_url_path(date=pd.to_datetime(args.date, utc=True), forecast_hour=args.forecast_hour)
+
+async def main(args):
+    idx_url = create_grib_idx_url_path(
+        date=pd.to_datetime(args.date, utc=True), forecast_hour=args.forecast_hour
+    )
     async with aiohttp.ClientSession() as session:
         r = await fetch(session, idx_url)
 
@@ -102,11 +114,75 @@ async def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = 'HRRR Grib downloader')
-    parser.add_argument('-date', type=str, help='HRRR UTC mode run date to query')
-    parser.add_argument('-forecast_hour', type=int, help='HRRR forecast hour to query')
-    parser.add_argument('-variable', default='PRATE', type=str, help="HRRR variable to query", choices=['REFC', 'RETOP', 'VIL', 'VIS', 'REFD', 'GUST', 'UPHL', 'UGRD', 'VGRD', 'PRES', 'HGT', 'TMP', 'SPFH', 'DPT', 'WIND', 'DSWRF', 'VBDSF', 'CPOFP', 'PRATE', 'APCP', 'WEASD', 'FROZR', 'CSNOW', 'CICEP', 'CFRZR', 'CRAIN', 'TCOLWold', 'TCOLIold', 'ULWRF', 'DLWRF', 'USWRF', 'VDDSF', 'SBT123', 'SBT124', 'SBT113', 'SBT114'])
-    parser.add_argument('-level', default='surface', type=str, help="level of the requested variable", choices=['entire atmosphere', 'cloud top', 'surface', '1000 m above ground', '4000 m above ground', '5000-2000 m above ground', '80 m above ground', '2 m above ground', '10 m above ground', 'cloud ceiling', 'cloud base', 'top of atmosphere'])
-    parser.add_argument('-out_dir', default='/tmp', type=str, help="directory to save grib files")
+    parser = argparse.ArgumentParser(description="HRRR Grib downloader")
+    parser.add_argument("-date", type=str, help="HRRR UTC mode run date to query")
+    parser.add_argument("-forecast_hour", type=int, help="HRRR forecast hour to query")
+    parser.add_argument(
+        "-variable",
+        default="PRATE",
+        type=str,
+        help="HRRR variable to query",
+        choices=[
+            "REFC",
+            "RETOP",
+            "VIL",
+            "VIS",
+            "REFD",
+            "GUST",
+            "UPHL",
+            "UGRD",
+            "VGRD",
+            "PRES",
+            "HGT",
+            "TMP",
+            "SPFH",
+            "DPT",
+            "WIND",
+            "DSWRF",
+            "VBDSF",
+            "CPOFP",
+            "PRATE",
+            "APCP",
+            "WEASD",
+            "FROZR",
+            "CSNOW",
+            "CICEP",
+            "CFRZR",
+            "CRAIN",
+            "TCOLWold",
+            "TCOLIold",
+            "ULWRF",
+            "DLWRF",
+            "USWRF",
+            "VDDSF",
+            "SBT123",
+            "SBT124",
+            "SBT113",
+            "SBT114",
+        ],
+    )
+    parser.add_argument(
+        "-level",
+        default="surface",
+        type=str,
+        help="level of the requested variable",
+        choices=[
+            "entire atmosphere",
+            "cloud top",
+            "surface",
+            "1000 m above ground",
+            "4000 m above ground",
+            "5000-2000 m above ground",
+            "80 m above ground",
+            "2 m above ground",
+            "10 m above ground",
+            "cloud ceiling",
+            "cloud base",
+            "top of atmosphere",
+        ],
+    )
+    parser.add_argument(
+        "-out_dir", default="/tmp", type=str, help="directory to save grib files"
+    )
     args = parser.parse_args()
     asyncio.run(main(args))
