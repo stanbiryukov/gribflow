@@ -77,7 +77,6 @@ def get_byte_ranges(dlocs: pd.DataFrame, dparsed: pd.DataFrame):
 
 
 def download_grib_chunk(url: str, path: str, _range=None):
-    print(f"Fetching: {url} with byte header: {_range} and saving to: {path}")
     req = urllib.request.Request(url, method="GET")
     if _range:
         req.add_header("Range", _range)  # 'bytes=b0-b1)'
