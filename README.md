@@ -1,2 +1,2 @@
-# gribit
+# gribflow
 Parse and fetch gribs
