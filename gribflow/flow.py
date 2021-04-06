@@ -24,7 +24,7 @@ def gray_to_np(ar, floor, ceil):
     return ar
 
 
-def calc_opt_flow(gray1, gray2, mode="pcaflow"):
+def calc_opt_flow(gray1, gray2, mode="disflow"):
     flow = None
     if mode == "franeback":
         flow = cv2.calcOpticalFlowFarneback(
@@ -47,9 +47,9 @@ def calc_opt_flow(gray1, gray2, mode="pcaflow"):
         # best speed and accuracy tradeoff
         flowfun = cv2.optflow.createOptFlow_PCAFlow()
     elif mode == "disflow":
-        # fastest but large errors
+        # fastest
         # https://arxiv.org/pdf/1603.03590.pdf
-        flowfun = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST)
+        flowfun = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
         flowfun.setUseSpatialPropagation(True)
     if flow is None:
         flow = flowfun.calc(gray1, gray2, None)
