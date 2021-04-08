@@ -1,4 +1,5 @@
 import cv2
+import jax
 import jax.numpy as jnp
 import jax.scipy.ndimage as jndi
 import numpy as np
@@ -95,6 +96,27 @@ def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     return I_result
 
 
+@jit
+def _semilagrangian(XY, delta_t, flow_tot, flow_inc, flow):
+    XYW = XY + flow_tot - flow_inc / 2.0
+    XYW = [XYW[:, :, 1], XYW[:, :, 0]]
+    ux = delta_t * jnp.reshape(
+        jndi.map_coordinates(
+            flow[:, :, 0], XYW, order=1, mode="constant", cval=jnp.nan
+        ),
+        flow.shape[0:2],
+    )
+    flow_inc = jax.ops.index_update(flow_inc, jax.ops.index[:, :, 0], ux)
+    vx = delta_t * jnp.reshape(
+        jndi.map_coordinates(
+            flow[:, :, 1], XYW, order=1, mode="constant", cval=jnp.nan
+        ),
+        flow.shape[0:2],
+    )
+    flow_inc = jax.ops.index_update(flow_inc, jax.ops.index[:, :, 1], vx)
+    return flow_inc
+
+
 def semilagrangian(I, flow, t, n_steps, n_iter=3, inverse=True):
     """
     Apply semi-Lagrangian extrapolation to an image by using a motion field.
@@ -106,26 +128,12 @@ def semilagrangian(I, flow, t, n_steps, n_iter=3, inverse=True):
     X, Y = jnp.meshgrid(jnp.arange(jnp.size(I, 1)), jnp.arange(jnp.size(I, 0)))
     XY = jnp.dstack([X, Y])
 
-    flow_tot = np.zeros((flow.shape[0], flow.shape[1], 2))
+    flow_tot = jnp.zeros((flow.shape[0], flow.shape[1], 2))
     for i in range(n_steps):
-        flow_inc = np.zeros(flow_tot.shape)
+        flow_inc = jnp.zeros(flow_tot.shape)
         for j in range(n_iter):
-            XYW = XY + flow_tot - flow_inc / 2.0
-            XYW = [XYW[:, :, 1], XYW[:, :, 0]]
-            flow_inc[:, :, 0] = delta_t * jnp.reshape(
-                jndi.map_coordinates(
-                    flow[:, :, 0], XYW, order=1, mode="constant", cval=jnp.nan
-                ),
-                flow.shape[0:2],
-            )
-            flow_inc[:, :, 1] = delta_t * jnp.reshape(
-                jndi.map_coordinates(
-                    flow[:, :, 1], XYW, order=1, mode="constant", cval=jnp.nan
-                ),
-                flow.shape[0:2],
-            )
-
-        flow_tot += coeff * flow_inc
+            flow_inc = _semilagrangian(XY = XY, delta_t = delta_t, flow_tot = flow_tot, flow_inc = flow_inc, flow = flow)
+        flow_tot = jnp.add(flow_tot, coeff * flow_inc)
 
     XYW = XY + flow_tot
     XYW = [XYW[:, :, 1], XYW[:, :, 0]]
@@ -133,4 +141,3 @@ def semilagrangian(I, flow, t, n_steps, n_iter=3, inverse=True):
         jndi.map_coordinates(I, XYW, mode="constant", cval=jnp.nan, order=1), I.shape
     )
     return IW
-
