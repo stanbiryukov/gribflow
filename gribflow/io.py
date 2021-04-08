@@ -93,7 +93,7 @@ def download_files(idx_url, out_dir: str, cfg: List):
     [
         download_grib_chunk(
             url=idx_url.replace(".idx", ""),
-            path=f"{out_dir}/{'_'.join(idx_url.rsplit('/')[-3:]).replace('.grib2.idx', '')}_{x[0][0].strip()}_{x[0][1].strip()}_{''.join(x[0][2]).replace(' ','_').strip()}.grib2",
+            path=f"{out_dir}/{'_'.join(idx_url.rsplit('/')[-3:]).replace('.grib2.idx', '')}_{x[0][0].strip()}_{''.join(x[0][1]).replace(' ','_').strip()}_{''.join(x[0][2]).replace(' ','_').strip()}.grib2",
             _range=f"bytes={x[1][0]}-{x[1][1]}",
         )
         for x in cfg
