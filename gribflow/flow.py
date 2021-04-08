@@ -155,7 +155,7 @@ def semilagrangian(I1, flow, t, n_steps=1, n_iter=3, inverse=True):
     coeff = 1.0 if inverse == False else -1.0
 
     delta_t = 1.0 * t / n_steps
-    X, Y = jnp.meshgrid(jnp.arange(jnp.size(I, 1)), jnp.arange(jnp.size(I, 0)))
+    X, Y = jnp.meshgrid(jnp.arange(jnp.size(I1, 1)), jnp.arange(jnp.size(I1, 0)))
     XY = jnp.dstack([X, Y])
 
     flow_tot = jnp.zeros((flow.shape[0], flow.shape[1], 2))
@@ -170,6 +170,6 @@ def semilagrangian(I1, flow, t, n_steps=1, n_iter=3, inverse=True):
     XYW = XY + flow_tot
     XYW = [XYW[:, :, 1], XYW[:, :, 0]]
     IW = jnp.reshape(
-        jndi.map_coordinates(I1, XYW, mode="constant", cval=jnp.nan, order=1), I.shape
+        jndi.map_coordinates(I1, XYW, mode="constant", cval=jnp.nan, order=1), I1.shape
     )
     return IW
