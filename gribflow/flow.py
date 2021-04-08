@@ -132,7 +132,9 @@ def semilagrangian(I, flow, t, n_steps, n_iter=3, inverse=True):
     for i in range(n_steps):
         flow_inc = jnp.zeros(flow_tot.shape)
         for j in range(n_iter):
-            flow_inc = _semilagrangian(XY = XY, delta_t = delta_t, flow_tot = flow_tot, flow_inc = flow_inc, flow = flow)
+            flow_inc = _semilagrangian(
+                XY=XY, delta_t=delta_t, flow_tot=flow_tot, flow_inc=flow_inc, flow=flow
+            )
         flow_tot = jnp.add(flow_tot, coeff * flow_inc)
 
     XYW = XY + flow_tot
