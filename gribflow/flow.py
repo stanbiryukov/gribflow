@@ -79,6 +79,21 @@ def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     Defaults to 5 equally spaced linear weights between frames.
     If tws, the time weights, are specified, only computes those.
     Inspired by pyoptflow.
+    
+    Parameters
+    ----------
+    I1: array
+        First numpy array image
+    I2: array
+        Second numpy array image
+    flowF: array
+        Forward input flow motion field
+    flowB: array
+        Backward input flow motion field
+    n: int
+        Number of frames to interpolate between the images
+    tws: list
+        If time weights between the two slices (ie [.1, .2, etc]) are passed only those frames are computed.
     """
     if flowB == None:
         flowB = -flowF
@@ -117,10 +132,25 @@ def _semilagrangian(XY, delta_t, flow_tot, flow_inc, flow):
     return flow_inc
 
 
-def semilagrangian(I, flow, t, n_steps, n_iter=3, inverse=True):
+def semilagrangian(I1, flow, t, n_steps=1, n_iter=3, inverse=True):
     """
     Apply semi-Lagrangian extrapolation to an image by using a motion field.
     Inspired by pyoptflow.
+    
+    Parameters
+    ----------
+    I1: array
+        Input numpy image
+    flow: array
+        Input flow motion field
+    t: float
+        Time step length for extrapolation. 1.0 would be the step delta the motion flow array was computed from.
+    n_steps: int
+        Number of intermediate time steps to use in the extrapolation calculation.
+    n_iter: int
+        Number of iterations of the semilagrangian calculation.
+    inverse: bool
+        True means extrapolation trajectory is computed backwards along the flow. Typically gives better results.
     """
     coeff = 1.0 if inverse == False else -1.0
 
@@ -140,6 +170,6 @@ def semilagrangian(I, flow, t, n_steps, n_iter=3, inverse=True):
     XYW = XY + flow_tot
     XYW = [XYW[:, :, 1], XYW[:, :, 0]]
     IW = jnp.reshape(
-        jndi.map_coordinates(I, XYW, mode="constant", cval=jnp.nan, order=1), I.shape
+        jndi.map_coordinates(I1, XYW, mode="constant", cval=jnp.nan, order=1), I.shape
     )
     return IW
