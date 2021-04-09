@@ -1,0 +1,7 @@
+aiohttp
+asyncio
+blosc
+opencv-python
+opencv-contrib-python
+jax
+Pillow
