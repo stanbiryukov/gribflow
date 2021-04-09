@@ -1,12 +1,17 @@
 import argparse
 import asyncio
+import base64
 import datetime
 import io
+import json
 import shutil
 import urllib
+from functools import partial
 from typing import List
 
 import aiohttp
+import blosc
+import numpy as np
 import pandas as pd
 
 
@@ -71,9 +76,7 @@ def get_byte_ranges(dlocs: pd.DataFrame, dparsed: pd.DataFrame):
     """
     byte range is that row index's first column and ends with the next row's byte start.
     """
-    return [
-        (dparsed.loc[r][1], dparsed.loc[r + 1][1]) for r in dlocs.index
-    ]
+    return [(dparsed.loc[r][1], dparsed.loc[r + 1][1]) for r in dlocs.index]
 
 
 def download_grib_chunk(url: str, path: str, _range=None):
@@ -100,9 +103,26 @@ def download_files(idx_url, out_dir: str, cfg: List):
     ]
 
 
+def encode_array(array, compressor=partial(blosc.pack_array, cname="lz4")):
+    """
+    Compressor numpy array to json-safe string
+    """
+    cdata = base64.urlsafe_b64encode(compressor(array)).decode("utf-8")
+    return cdata
+
+
+def decode_array(cdata, compressor=blosc.unpack_array):
+    """
+    Decode string to bytes and uncompress to numpy array
+    """
+    data = compressor(base64.urlsafe_b64decode(cdata))
+    return data
+
+
 async def main(args):
     idx_url = create_grib_idx_url_path(
-        timestamp=pd.to_datetime(args.timestamp, utc=True), forecast_hour=args.forecast_hour
+        timestamp=pd.to_datetime(args.timestamp, utc=True),
+        forecast_hour=args.forecast_hour,
     )
     async with aiohttp.ClientSession() as session:
         r = await fetch(session, idx_url)
@@ -115,13 +135,22 @@ async def main(args):
 
 
 if __name__ == "__main__":
-    '''
+    """
     Fetch subsets of HRRR sub-hourly forecast outputs.
-        ex: # python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -forecast_hour 6 -variable 'PRATE' -level 'surface' -out_dir '/tmp'
-    '''
+    
+    Examples
+    ----------
+        python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -forecast_hour 6 -variable 'PRATE' -level 'surface' -out_dir '/tmp'
+    """
     parser = argparse.ArgumentParser(description="HRRR Grib downloader")
-    parser.add_argument("-timestamp", type=str, help="HRRR UTC date and time run to query, ie: '2021-03-30 03:15:00Z' ")
-    parser.add_argument("-forecast_hour", type=int, help="HRRR forecast hour of model run to query")
+    parser.add_argument(
+        "-timestamp",
+        type=str,
+        help="HRRR UTC date and time run to query, ie: '2021-03-30 03:15:00Z' ",
+    )
+    parser.add_argument(
+        "-forecast_hour", type=int, help="HRRR forecast hour of model run to query"
+    )
     parser.add_argument(
         "-variable",
         default="PRATE",
