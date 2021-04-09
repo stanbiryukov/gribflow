@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import base64
+import contextlib
 import ctypes
 import datetime
 import io
@@ -153,7 +154,9 @@ class FastGrib:
         self, libeccodes_loc=None,
     ):
         self.libeccodes_loc = (
-            self.get_libeccodes() if libeccodes_loc is None else libeccodes_loc
+            ctypes.util.find_library("eccodes")
+            if libeccodes_loc is None
+            else libeccodes_loc
         )
 
         eccodes = ctypes.CDLL(self.libeccodes_loc)
@@ -188,16 +191,6 @@ class FastGrib:
         grib_handle_delete.argtypes = [ctypes.POINTER(grib_handle)]
         grib_handle_delete.restype = ctypes.c_long
 
-    def get_libeccodes(self):
-        try:
-            libloc = subprocess.check_output(["bash", "-c", "dpkg -L libeccodes-dev"])
-        except Exception as e:
-            raise OSError(2, "libeccodes-dev not found")
-        libloc = [
-            x for x in libloc.decode("utf-8").splitlines() if "libeccodes.so" in x
-        ]
-        return libloc[0]
-
     def get_key_long(self, gh, key):
         _value = ctypes.c_long(-1)
         assert grib_get_long(gh, key, _value) == 0
@@ -205,9 +198,7 @@ class FastGrib:
 
     def get_headers(self, buffer):
         # redirect STDERR
-        fd = sys.stderr.fileno()
-        with os.fdopen(os.dup(fd), "w") as _stderr, open(os.devnull, "w") as devnull:
-            os.dup2(devnull.fileno(), fd)
+        with contextlib.redirect_stderr(None):
             gh = grib_handle_new_from_message_copy(
                 None, buffer, len(buffer)
             )  # TODO supress stderr
@@ -269,8 +260,6 @@ class FastGrib:
             alternativeRowScanning = 0;
             """
             grib_handle_delete(gh)
-            # restore
-            os.dup2(_stderr.fileno(), fd)
             return (
                 discipline,
                 category,
