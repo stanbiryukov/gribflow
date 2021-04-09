@@ -1,10 +1,15 @@
 import argparse
 import asyncio
 import base64
+import ctypes
 import datetime
 import io
 import json
+import os
 import shutil
+import struct
+import subprocess
+import sys
 import urllib
 from functools import partial
 from typing import List
@@ -13,11 +18,6 @@ import aiohttp
 import blosc
 import numpy as np
 import pandas as pd
-import subprocess
-import ctypes
-import os
-import struct
-import sys
 
 
 async def fetch(session, url):
@@ -133,7 +133,7 @@ class grib_handle(ctypes.Structure):
 
 
 class FastGrib:
-    '''
+    """
     Read lat, lon, and array values from a sliced grib file.
 
     Parameters
@@ -147,28 +147,41 @@ class FastGrib:
     with open(grib_file, "rb") as f:
         lats, lons, vals = fgrib.get_values(f.read())
 
-    '''
+    """
 
     def __init__(
-        self,
-        libeccodes_loc=None,
+        self, libeccodes_loc=None,
     ):
-        self.libeccodes_loc = self.get_libeccodes() if libeccodes_loc is None else libeccodes_loc
+        self.libeccodes_loc = (
+            self.get_libeccodes() if libeccodes_loc is None else libeccodes_loc
+        )
 
         eccodes = ctypes.CDLL(self.libeccodes_loc)
         # _version = eccodes.grib_get_api_version()
         # print(f'eccodes: {_version}')
         # grib_get_long
         grib_get_long = eccodes.grib_get_long
-        grib_get_long.argtypes = [ctypes.POINTER(grib_handle), ctypes.c_char_p, ctypes.POINTER(ctypes.c_long)]
+        grib_get_long.argtypes = [
+            ctypes.POINTER(grib_handle),
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_long),
+        ]
         grib_get_long.restype = ctypes.c_int
         # grib_get_size
         grib_get_size = eccodes.grib_get_size
-        grib_get_size.argtypes = [ctypes.POINTER(grib_handle), ctypes.c_char_p, ctypes.POINTER(ctypes.c_size_t)]
+        grib_get_size.argtypes = [
+            ctypes.POINTER(grib_handle),
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
         grib_get_size.restype = ctypes.c_int
         # grib_handle_new_from_message_copy
         grib_handle_new_from_message_copy = eccodes.grib_handle_new_from_message_copy
-        grib_handle_new_from_message_copy.argtypes = [ctypes.POINTER(grib_context), ctypes.c_void_p, ctypes.c_long]
+        grib_handle_new_from_message_copy.argtypes = [
+            ctypes.POINTER(grib_context),
+            ctypes.c_void_p,
+            ctypes.c_long,
+        ]
         grib_handle_new_from_message_copy.restype = ctypes.POINTER(grib_handle)
         # grib_handle_delete
         grib_handle_delete = eccodes.grib_handle_delete
@@ -177,10 +190,12 @@ class FastGrib:
 
     def get_libeccodes(self):
         try:
-            libloc = subprocess.check_output(['bash', '-c', 'dpkg -L libeccodes-dev'])
+            libloc = subprocess.check_output(["bash", "-c", "dpkg -L libeccodes-dev"])
         except Exception as e:
             raise OSError(2, "libeccodes-dev not found")
-        libloc = [x for x in libloc.decode('utf-8').splitlines() if 'libeccodes.so' in x]
+        libloc = [
+            x for x in libloc.decode("utf-8").splitlines() if "libeccodes.so" in x
+        ]
         return libloc[0]
 
     def get_key_long(self, gh, key):
@@ -193,36 +208,60 @@ class FastGrib:
         fd = sys.stderr.fileno()
         with os.fdopen(os.dup(fd), "w") as _stderr, open(os.devnull, "w") as devnull:
             os.dup2(devnull.fileno(), fd)
-            gh = grib_handle_new_from_message_copy(None, buffer, len(buffer))   # TODO supress stderr
+            gh = grib_handle_new_from_message_copy(
+                None, buffer, len(buffer)
+            )  # TODO supress stderr
             # field type
             discipline = self.get_key_long(gh, b"discipline")
-            category   = self.get_key_long(gh, b"parameterCategory")
-            number     = self.get_key_long(gh, b"parameterNumber")
+            category = self.get_key_long(gh, b"parameterCategory")
+            number = self.get_key_long(gh, b"parameterNumber")
             # initialization (reference) date
-            significance_of_reference_time = self.get_key_long(gh, b"significanceOfReferenceTime")
-            init_date                      = self.get_key_long(gh, b"dataDate")
-            init_time                      = self.get_key_long(gh, b"dataTime")
+            significance_of_reference_time = self.get_key_long(
+                gh, b"significanceOfReferenceTime"
+            )
+            init_date = self.get_key_long(gh, b"dataDate")
+            init_time = self.get_key_long(gh, b"dataTime")
             # valid date
-            valid_date                  = self.get_key_long(gh, b"validityDate")
-            valid_time                  = self.get_key_long(gh, b"validityTime")
+            valid_date = self.get_key_long(gh, b"validityDate")
+            valid_time = self.get_key_long(gh, b"validityTime")
             # Forecast step
             try:
                 step_type = self.get_key_long(gh, b"typeOfStatisticalProcessing")
             except:
                 step_type = 255
             start_step = self.get_key_long(gh, b"startStep")
-            end_step   = self.get_key_long(gh, b"endStep")
-            #valid_range = start_step - end_step
+            end_step = self.get_key_long(gh, b"endStep")
+            # valid_range = start_step - end_step
             valid_range = end_step - start_step
             # vertical
-            type_of_first_fixed_surface          = self.get_key_long(gh, b"typeOfFirstFixedSurface")
-            scale_factor_of_first_fixed_surface  = self.get_key_long(gh, b"scaleFactorOfFirstFixedSurface")
-            scaled_value_of_first_fixed_surface  = self.get_key_long(gh, b"scaledValueOfFirstFixedSurface")
-            first_fixed_surface  = scaled_value_of_first_fixed_surface / 10**scale_factor_of_first_fixed_surface + 0
-            type_of_second_fixed_surface         = self.get_key_long(gh, b"typeOfSecondFixedSurface")
-            scale_factor_of_second_fixed_surface = self.get_key_long(gh, b"scaleFactorOfSecondFixedSurface")
-            scaled_value_of_second_fixed_surface = self.get_key_long(gh, b"scaledValueOfSecondFixedSurface")
-            second_fixed_surface  = scaled_value_of_second_fixed_surface / 10**scale_factor_of_second_fixed_surface + 0
+            type_of_first_fixed_surface = self.get_key_long(
+                gh, b"typeOfFirstFixedSurface"
+            )
+            scale_factor_of_first_fixed_surface = self.get_key_long(
+                gh, b"scaleFactorOfFirstFixedSurface"
+            )
+            scaled_value_of_first_fixed_surface = self.get_key_long(
+                gh, b"scaledValueOfFirstFixedSurface"
+            )
+            first_fixed_surface = (
+                scaled_value_of_first_fixed_surface
+                / 10 ** scale_factor_of_first_fixed_surface
+                + 0
+            )
+            type_of_second_fixed_surface = self.get_key_long(
+                gh, b"typeOfSecondFixedSurface"
+            )
+            scale_factor_of_second_fixed_surface = self.get_key_long(
+                gh, b"scaleFactorOfSecondFixedSurface"
+            )
+            scaled_value_of_second_fixed_surface = self.get_key_long(
+                gh, b"scaledValueOfSecondFixedSurface"
+            )
+            second_fixed_surface = (
+                scaled_value_of_second_fixed_surface
+                / 10 ** scale_factor_of_second_fixed_surface
+                + 0
+            )
             """
             iScansNegatively = 0;
             jScansPositively = 1;
@@ -247,7 +286,7 @@ class FastGrib:
                 type_of_first_fixed_surface,
                 first_fixed_surface,
                 type_of_second_fixed_surface,
-                second_fixed_surface
+                second_fixed_surface,
             )
 
     def headers(self, buf):
@@ -268,20 +307,20 @@ class FastGrib:
         if edition == 1:
             # GRIB2 - Sections 1-2
             record_length = struct.unpack(">L", b"\x00" + _567)[0]
-            for s in [1,2]:
-                nb = struct.unpack('>L', b"\x00" + buf.read(3))[0]
-                buf.seek(nb-3, os.SEEK_CUR)
+            for s in [1, 2]:
+                nb = struct.unpack(">L", b"\x00" + buf.read(3))[0]
+                buf.seek(nb - 3, os.SEEK_CUR)
             # mark end of Section 2
             header_end = buf.tell()
         else:
             # GRIB2 - Sections 1-5
-            record_length = struct.unpack('>Q', buf.read(8))[0]
-            for s in [1,2,3,4,5]:
-                nb = struct.unpack('>L', buf.read(4))[0]
+            record_length = struct.unpack(">Q", buf.read(8))[0]
+            for s in [1, 2, 3, 4, 5]:
+                nb = struct.unpack(">L", buf.read(4))[0]
                 if struct.unpack(">B", buf.read(1))[0] != s:
-                    buf.seek(-5, os.SEEK_CUR) # rewind
+                    buf.seek(-5, os.SEEK_CUR)  # rewind
                 else:
-                    buf.seek(nb-5, os.SEEK_CUR)
+                    buf.seek(nb - 5, os.SEEK_CUR)
             # mark end of Section 5
             header_end = buf.tell()
         return record_start, record_length, header_end
@@ -292,7 +331,7 @@ class FastGrib:
         assert grib_get_size(gh, b"values", nvalues) == 0
         nx = self.get_key_long(gh, b"Nx")
         ny = self.get_key_long(gh, b"Ny")
-        assert nx*ny == nvalues.value
+        assert nx * ny == nvalues.value
         j_consecutive = self.get_key_long(gh, b"jPointsAreConsecutive")
         lats = np.empty(nvalues.value)
         lons = np.empty(nvalues.value)
@@ -301,15 +340,15 @@ class FastGrib:
         lons_p = lons.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         vals_p = vals.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         assert eccodes.codes_grib_get_data(gh, lats_p, lons_p, vals_p) == 0
-        lons = np.where(lons > 180., lons-360., lons) # make sure WGS84
+        lons = np.where(lons > 180.0, lons - 360.0, lons)  # make sure WGS84
         if j_consecutive:
-            lats = lats.reshape(nx,ny)
-            lons = lons.reshape(nx,ny)
-            vals = vals.reshape(nx,ny)
+            lats = lats.reshape(nx, ny)
+            lons = lons.reshape(nx, ny)
+            vals = vals.reshape(nx, ny)
         else:
-            lats = lats.reshape(ny,nx)
-            lons = lons.reshape(ny,nx)
-            vals = vals.reshape(ny,nx)
+            lats = lats.reshape(ny, nx)
+            lons = lons.reshape(ny, nx)
+            vals = vals.reshape(ny, nx)
         return lats, lons, vals
 
 
