@@ -12,6 +12,7 @@ import struct
 import subprocess
 import sys
 import urllib
+from ctypes.util import find_library
 from functools import partial
 from typing import List
 
@@ -146,60 +147,63 @@ class FastGrib:
     ----------
     fgrib = FastGrib()
     with open(grib_file, "rb") as f:
+        hdrs = fgrib.get_headers(f.read())
+        f.seek(0)
         lats, lons, vals = fgrib.get_values(f.read())
 
     """
 
     def __init__(
-        self, libeccodes_loc=None,
+        self,
+        libeccodes_loc=None,
     ):
         self.libeccodes_loc = (
-            ctypes.util.find_library("eccodes")
-            if libeccodes_loc is None
-            else libeccodes_loc
+            find_library("eccodes") if libeccodes_loc is None else libeccodes_loc
         )
 
-        eccodes = ctypes.CDLL(self.libeccodes_loc)
+        self.eccodes = ctypes.CDLL(self.libeccodes_loc)
         # _version = eccodes.grib_get_api_version()
         # print(f'eccodes: {_version}')
         # grib_get_long
-        grib_get_long = eccodes.grib_get_long
-        grib_get_long.argtypes = [
+        self.grib_get_long = self.eccodes.grib_get_long
+        self.grib_get_long.argtypes = [
             ctypes.POINTER(grib_handle),
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_long),
         ]
-        grib_get_long.restype = ctypes.c_int
+        self.grib_get_long.restype = ctypes.c_int
         # grib_get_size
-        grib_get_size = eccodes.grib_get_size
-        grib_get_size.argtypes = [
+        self.grib_get_size = self.eccodes.grib_get_size
+        self.grib_get_size.argtypes = [
             ctypes.POINTER(grib_handle),
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_size_t),
         ]
-        grib_get_size.restype = ctypes.c_int
+        self.grib_get_size.restype = ctypes.c_int
         # grib_handle_new_from_message_copy
-        grib_handle_new_from_message_copy = eccodes.grib_handle_new_from_message_copy
-        grib_handle_new_from_message_copy.argtypes = [
+        self.grib_handle_new_from_message_copy = (
+            self.eccodes.grib_handle_new_from_message_copy
+        )
+        self.grib_handle_new_from_message_copy.argtypes = [
             ctypes.POINTER(grib_context),
             ctypes.c_void_p,
             ctypes.c_long,
         ]
-        grib_handle_new_from_message_copy.restype = ctypes.POINTER(grib_handle)
+        self.grib_handle_new_from_message_copy.restype = ctypes.POINTER(grib_handle)
         # grib_handle_delete
-        grib_handle_delete = eccodes.grib_handle_delete
-        grib_handle_delete.argtypes = [ctypes.POINTER(grib_handle)]
-        grib_handle_delete.restype = ctypes.c_long
+        self.grib_handle_delete = self.eccodes.grib_handle_delete
+        self.grib_handle_delete.argtypes = [ctypes.POINTER(grib_handle)]
+        self.grib_handle_delete.restype = ctypes.c_long
 
     def get_key_long(self, gh, key):
         _value = ctypes.c_long(-1)
-        assert grib_get_long(gh, key, _value) == 0
+        assert self.grib_get_long(gh, key, _value) == 0
         return _value.value
 
     def get_headers(self, buffer):
         # redirect STDERR
         with contextlib.redirect_stderr(None):
-            gh = grib_handle_new_from_message_copy(
+            gh = self.grib_handle_new_from_message_copy(
                 None, buffer, len(buffer)
             )  # TODO supress stderr
             # field type
@@ -259,7 +263,7 @@ class FastGrib:
             jPointsAreConsecutive = 0;
             alternativeRowScanning = 0;
             """
-            grib_handle_delete(gh)
+            self.grib_handle_delete(gh)
             return (
                 discipline,
                 category,
@@ -279,8 +283,7 @@ class FastGrib:
             )
 
     def headers(self, buf):
-        """ mark start of record and end of header
-        """
+        """mark start of record and end of header"""
         # GRIB2 - Section 0
         while True:
             GRIB = buf.read(4)
@@ -315,9 +318,9 @@ class FastGrib:
         return record_start, record_length, header_end
 
     def get_values(self, buffer):
-        gh = grib_handle_new_from_message_copy(None, buffer, len(buffer))
+        gh = self.grib_handle_new_from_message_copy(None, buffer, len(buffer))
         nvalues = ctypes.c_size_t(-1)
-        assert grib_get_size(gh, b"values", nvalues) == 0
+        assert self.grib_get_size(gh, b"values", nvalues) == 0
         nx = self.get_key_long(gh, b"Nx")
         ny = self.get_key_long(gh, b"Ny")
         assert nx * ny == nvalues.value
@@ -328,7 +331,7 @@ class FastGrib:
         lats_p = lats.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         lons_p = lons.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         vals_p = vals.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-        assert eccodes.codes_grib_get_data(gh, lats_p, lons_p, vals_p) == 0
+        assert self.eccodes.codes_grib_get_data(gh, lats_p, lons_p, vals_p) == 0
         lons = np.where(lons > 180.0, lons - 360.0, lons)  # make sure WGS84
         if j_consecutive:
             lats = lats.reshape(nx, ny)
@@ -359,7 +362,7 @@ async def main(args):
 if __name__ == "__main__":
     """
     Fetch subsets of HRRR sub-hourly forecast outputs.
-    
+
     Examples
     ----------
         python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -forecast_hour 6 -variable 'PRATE' -level 'surface' -out_dir '/tmp'

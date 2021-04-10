@@ -13,8 +13,8 @@ extra_setuptools_args = dict(
 setup(
     name ='gribflow',
     version = __version__,
-    author ='Stan Biryukov',
-    author_email ='stanley.biryukov@tomorrow.io',
+    author ='Brian McKenna, Stan Biryukov',
+    author_email ='brian.mckenna@tomorrow.io, stanley.biryukov@tomorrow.io',
     url = 'git@github.com:stanbiryukov/gribflow.git',
     install_requires = [requirements,],
     package_data = {'gribflow':['resources/*']},
