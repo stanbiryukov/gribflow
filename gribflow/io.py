@@ -158,7 +158,7 @@ class FastGrib:
         libeccodes_loc=None,
     ):
         self.libeccodes_loc = (
-            find_library("eccodes") if libeccodes_loc is None else libeccodes_loc
+            self.find_eccodes() if libeccodes_loc is None else libeccodes_loc
         )
 
         self.eccodes = ctypes.CDLL(self.libeccodes_loc)
@@ -194,6 +194,13 @@ class FastGrib:
         self.grib_handle_delete = self.eccodes.grib_handle_delete
         self.grib_handle_delete.argtypes = [ctypes.POINTER(grib_handle)]
         self.grib_handle_delete.restype = ctypes.c_long
+
+    def find_eccodes(self):
+        libloc = find_library("eccodes")
+        if not isinstance(libloc, str):
+            raise OSError(2, 'eccodes not found')
+        else:
+            return libloc
 
     def get_key_long(self, gh, key):
         _value = ctypes.c_long(-1)

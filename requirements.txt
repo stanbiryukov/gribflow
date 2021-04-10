@@ -1,7 +1,11 @@
 aiohttp
 asyncio
 blosc
+fastapi
+gunicorn
 opencv-python
 opencv-contrib-python
 jax
+pandas
 Pillow
+uvicorn[standard]
