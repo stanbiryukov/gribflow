@@ -93,15 +93,15 @@ def download_grib_chunk(url: str, path: str, _range=None):
             shutil.copyfileobj(response, out_file)
 
 
-def download_files(idx_url: str, gribidx: list, out_dir: str, cfg: list):
+def download_files(args, idx_url: str, gribidx: list, cfg: list):
     """
     Download the files and save a unique filename based on metadata collected.
     """
-    path_base = os.path.basename(idx_url).replace('.grib2.idx','')
+    path_base = ''.join(idx_url.partition(args.model.lower())[1:]).replace('.grib2.idx','').replace('/','')
     [
         download_grib_chunk(
             url=idx_url.replace(".idx", ""),
-            path = f"{out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }",
+            path = f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
             _range=f"bytes={x[1][0]}-{x[1][1]}",
         )
         for x in cfg
@@ -347,7 +347,7 @@ async def main(args):
     gribidx = read_idx(r)
     dlocs = get_byte_locs(gribidx=gribidx, variable=args.variable, level=args.level, forecast=args.forecast)
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
-    download_files(idx_url=idx_url, gribidx=gribidx, out_dir=args.out_dir, cfg=list(zip(dlocs, dranges)))
+    download_files(args=args, idx_url=idx_url, gribidx=gribidx, cfg=list(zip(dlocs, dranges)))
 
 
 if __name__ == "__main__":
