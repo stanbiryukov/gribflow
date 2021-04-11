@@ -67,9 +67,8 @@ async def make_request(url, path, _range):
     header = {"Range": f"bytes={_range}"}
     async with aiohttp.ClientSession(headers=header) as session:
         async with session.get(url=url) as resp:
-            f = await aiofiles.open(path, mode="wb")
-            await f.write(await resp.read())
-            await f.close()
+            async with aiofiles.open(path, "wb") as f:
+                await f.write(await resp.read())
 
 
 async def download_files(args, idx_url: str, gribidx: list, cfg: list):
