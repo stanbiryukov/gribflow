@@ -77,15 +77,6 @@ def get_byte_locs(gribidx: list, variable: str, level: str, forecast: str):
     matches = [x[0] for x in gribidx if (x[4] == variable) & (x[5] == level) & ( p.sub('', x[6]) == forecast)]
     return matches
 
-[x[2] for x in gribidx if (x[4] == 'PRATE') & (x[5] == 'surface')]
-
-[x[1] for x in gribidx]
-
-[gribidx[x][2] for x in range(len(gribidx))]
-
-[x[3] for x in gribidx]
-
-
 
 def get_byte_ranges(dlocs: list, gribidx: list):
     """
