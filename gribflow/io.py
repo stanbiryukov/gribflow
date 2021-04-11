@@ -345,8 +345,8 @@ class FastGrib:
 async def main(args):
     for baseurl in [
         "https://noaa-hrrr-bdp-pds.s3.amazonaws.com",
-        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/",
         "https://storage.googleapis.com/high-resolution-rapid-refresh",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod",
     ]:
         idx_url = create_grib_idx_url_path(
             baseurl=baseurl,
@@ -376,7 +376,7 @@ if __name__ == "__main__":
 
     Examples
     ----------
-        python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -model 'HRRR' -forecast_hour 6 -variable 'PRATE' -level 'surface' -forecast 'min fcst' -out_dir '/tmp'
+        python get_gribs.py -model 'HRRR' -timestamp '2021-04-01 03:00:00Z' -forecast_hour 3 -variable 'PRATE' -level 'surface' -forecast 'min fcst' -out_dir '/tmp'
     """
     parser = argparse.ArgumentParser(description="Grib downloader")
     parser.add_argument(
@@ -398,44 +398,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="variable to query",
-        choices=[
-            "REFC",
-            "RETOP",
-            "VIL",
-            "VIS",
-            "REFD",
-            "GUST",
-            "UPHL",
-            "UGRD",
-            "VGRD",
-            "PRES",
-            "HGT",
-            "TMP",
-            "SPFH",
-            "DPT",
-            "WIND",
-            "DSWRF",
-            "VBDSF",
-            "CPOFP",
-            "PRATE",
-            "APCP",
-            "WEASD",
-            "FROZR",
-            "CSNOW",
-            "CICEP",
-            "CFRZR",
-            "CRAIN",
-            "TCOLWold",
-            "TCOLIold",
-            "ULWRF",
-            "DLWRF",
-            "USWRF",
-            "VDDSF",
-            "SBT123",
-            "SBT124",
-            "SBT113",
-            "SBT114",
-        ],
     )
     parser.add_argument(
         "-level",
@@ -443,20 +405,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="level of the requested variable",
-        choices=[
-            "entire atmosphere",
-            "cloud top",
-            "surface",
-            "1000 m above ground",
-            "4000 m above ground",
-            "5000-2000 m above ground",
-            "80 m above ground",
-            "2 m above ground",
-            "10 m above ground",
-            "cloud ceiling",
-            "cloud base",
-            "top of atmosphere",
-        ],
     )
     parser.add_argument(
         "-forecast",
@@ -464,11 +412,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="forecast type of the requested variable",
-        choices=[
-            "min acc fcst",
-            "min ave fcst",
-            "min fcst",
-        ],
     )
     parser.add_argument(
         "-out_dir",
