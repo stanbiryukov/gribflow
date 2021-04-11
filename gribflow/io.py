@@ -3,7 +3,6 @@ import asyncio
 import datetime
 import re
 
-import aiofiles
 import aiohttp
 
 
@@ -67,8 +66,9 @@ async def make_request(url, path, _range):
     header = {"Range": f"bytes={_range}"}
     async with aiohttp.ClientSession(headers=header) as session:
         async with session.get(url=url) as resp:
-            async with aiofiles.open(path, "wb") as f:
-                await f.write(await resp.read())
+            with open(path, "wb") as f:
+                async for chunk in resp.content.iter_chunked(4096):
+                    f.write(chunk)
 
 
 async def download_files(args, idx_url: str, gribidx: list, cfg: list):
