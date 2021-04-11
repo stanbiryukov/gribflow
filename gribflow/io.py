@@ -80,16 +80,16 @@ async def download_files(args, idx_url: str, gribidx: list, cfg: list):
         .replace(".grib2.idx", "")
         .replace("/", "")
     )
-    tasks = []
-    for x in cfg:
-        task = asyncio.create_task(
+    tasks = [
+        asyncio.create_task(
             make_request(
                 url=idx_url.replace(".idx", ""),
                 path=f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
                 _range=f"{x[1][0]}-{x[1][1]}",
             )
         )
-        tasks.append(task)
+        for x in cfg
+    ]
     results = await asyncio.gather(*tasks)
     return results
 
