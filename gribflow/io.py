@@ -2,8 +2,6 @@ import argparse
 import asyncio
 import datetime
 import re
-import shutil
-import urllib
 
 import aiofiles
 import aiohttp
