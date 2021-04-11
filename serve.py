@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import blosc
+import base64
+import json
 
 def encode_array(array, compressor=partial(blosc.pack_array, cname="lz4")):
     """
