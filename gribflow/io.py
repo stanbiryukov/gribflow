@@ -15,7 +15,6 @@ import sys
 import urllib
 from ctypes.util import find_library
 from functools import partial
-from typing import List
 
 import aiohttp
 import numpy as np
@@ -94,7 +93,7 @@ def download_grib_chunk(url: str, path: str, _range=None):
             shutil.copyfileobj(response, out_file)
 
 
-def download_files(idx_url, out_dir: str, cfg: List):
+def download_files(idx_url: str, gribidx: list, out_dir: str, cfg: list):
     """
     Download the files and save a unique filename based on metadata collected.
     """
@@ -348,7 +347,7 @@ async def main(args):
     gribidx = read_idx(r)
     dlocs = get_byte_locs(gribidx=gribidx, variable=args.variable, level=args.level, forecast=args.forecast)
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
-    download_files(idx_url=idx_url, out_dir=args.out_dir, cfg=list(zip(dlocs, dranges)))
+    download_files(idx_url=idx_url, gribidx=gribidx, out_dir=args.out_dir, cfg=list(zip(dlocs, dranges)))
 
 
 if __name__ == "__main__":
