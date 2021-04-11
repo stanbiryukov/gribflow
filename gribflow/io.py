@@ -7,6 +7,7 @@ import datetime
 import io
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -17,9 +18,7 @@ from functools import partial
 from typing import List
 
 import aiohttp
-import blosc
 import numpy as np
-import pandas as pd
 
 
 async def fetch(session, url):
@@ -28,8 +27,10 @@ async def fetch(session, url):
     """
     async with session.get(url) as response:
         if response.status != 200:
-            response.raise_for_status()
-        return await response.text()
+            print(f"Missing {url}")
+            return None
+        elif response.status == 200:
+            return await response.text()
 
 
 async def fetch_all(session, urls):
@@ -44,47 +45,53 @@ async def fetch_all(session, urls):
     return results
 
 
-def create_grib_idx_url_path(timestamp: datetime, forecast_hour: int):
+def create_grib_idx_url_path(baseurl: str, timestamp: datetime, forecast_hour: int):
     """
     Given a date and forecast hour return the expected grib.idx filepath on the open data S3 bucket for HRRR `wrfsubh` file.
     """
-    return f"https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/conus/hrrr.t{timestamp.hour:02d}z.wrfsubhf{str(forecast_hour).zfill(2)}.grib2.idx"
+    return f"{baseurl}/hrrr.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/conus/hrrr.t{timestamp.hour:02d}z.wrfsubhf{str(forecast_hour).zfill(2)}.grib2.idx"
 
 
-def parse_to_df(r):
+def read_idx(response):
     """
-    Pass the grib.idx bytes response into a pandas dataframe.
+    Read grib index file as list and insert row number into beginning
     """
-    return pd.read_csv(io.StringIO(r), sep=":", index_col=0, header=None).dropna(
-        axis=1, how="all"
-    )
+    i = 0
+    data = []
+    lines = response.split(':\n')
+    for line in lines:
+        line_ = line.split(':')
+        if len(line_) > 1:
+            line_.insert(0, i)
+            data.append(line_)
+        i += 1
+    return data
 
 
-def get_byte_locs(dloc: pd.DataFrame, variable: str, level: str):
+def get_byte_locs(gribidx: list, variable: str, level: str, forecast: str):
     """
-    var is in 3rd column, 4th is level
+    var is in 4th column, 5th is level, 6th is forecast type (strip up until first word)
+    first column is the 0..N index we created.
     """
-    return dloc[(dloc[3] == variable) & (dloc[4] == level)]
+    p = re.compile(r"(^[^A-Za-z]+)")
+    matches = [x[0] for x in gribidx if (x[4] == variable) & (x[5] == level) & ( p.sub('', x[6]) == forecast)]
+    return matches
+
+[x[2] for x in gribidx if (x[4] == 'PRATE') & (x[5] == 'surface')]
+
+[x[1] for x in gribidx]
+
+[gribidx[x][2] for x in range(len(gribidx))]
+
+[x[3] for x in gribidx]
 
 
-def get_forecast_metadata(dlocs: pd.DataFrame):
-    """
-    get level, variable, and strip time/type metadata in 5th column
-    """
-    lvl = dlocs[4].unique()
-    assert len(lvl) == 1
-    var = dlocs[3].unique()
-    assert len(var) == 1
-    meta = [(var[0], lvl[0], x) for x in dlocs[5].str.split(" ", 1).to_list()]
-    return meta
 
-
-def get_byte_ranges(dlocs: pd.DataFrame, dparsed: pd.DataFrame):
+def get_byte_ranges(dlocs: list, gribidx: list):
     """
-    byte range is that row index's first column and ends with the next row's byte start.
+    byte range is that row index's second column and ends with the next row's byte start.
     """
-    return [(dparsed.loc[r][1], dparsed.loc[r + 1][1]) for r in dlocs.index]
-
+    return [ (gribidx[x][2], gribidx[x+1][2]) for x in dlocs]
 
 def download_grib_chunk(url: str, path: str, _range=None):
     # print(f"Fetching: {url} with byte header: {_range} and saving to: {path}")
@@ -100,30 +107,15 @@ def download_files(idx_url, out_dir: str, cfg: List):
     """
     Download the files and save a unique filename based on metadata collected.
     """
+    path_base = os.path.basename(idx_url).replace('.grib2.idx','')
     [
         download_grib_chunk(
             url=idx_url.replace(".idx", ""),
-            path=f"{out_dir}/{'_'.join(idx_url.rsplit('/')[-3:]).replace('.grib2.idx', '')}_{x[0][0].strip()}_{''.join(x[0][1]).replace(' ','_').strip()}_{''.join(x[0][2]).replace(' ','_').strip()}.grib2",
+            path = f"{out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }",
             _range=f"bytes={x[1][0]}-{x[1][1]}",
         )
         for x in cfg
     ]
-
-
-def encode_array(array, compressor=partial(blosc.pack_array, cname="lz4")):
-    """
-    Compressor numpy array to json-safe string
-    """
-    cdata = base64.urlsafe_b64encode(compressor(array)).decode("utf-8")
-    return cdata
-
-
-def decode_array(cdata, compressor=blosc.unpack_array):
-    """
-    Decode string to bytes and uncompress to numpy array
-    """
-    data = compressor(base64.urlsafe_b64decode(cdata))
-    return data
 
 
 class grib_context(ctypes.Structure):
@@ -198,7 +190,7 @@ class FastGrib:
     def find_eccodes(self):
         libloc = find_library("eccodes")
         if not isinstance(libloc, str):
-            raise OSError(2, 'eccodes not found')
+            raise OSError(2, "eccodes not found")
         else:
             return libloc
 
@@ -352,42 +344,47 @@ class FastGrib:
 
 
 async def main(args):
-    idx_url = create_grib_idx_url_path(
-        timestamp=pd.to_datetime(args.timestamp, utc=True),
-        forecast_hour=args.forecast_hour,
-    )
-    async with aiohttp.ClientSession() as session:
-        r = await fetch(session, idx_url)
-
-    dparsed = parse_to_df(r)
-    dlocs = get_byte_locs(dparsed, variable=args.variable, level=args.level)
-    dmeta = get_forecast_metadata(dlocs)
-    dranges = get_byte_ranges(dlocs=dlocs, dparsed=dparsed)
-    download_files(idx_url=idx_url, out_dir=args.out_dir, cfg=list(zip(dmeta, dranges)))
+    for baseurl in ['https://noaa-hrrr-bdp-pds.s3.amazonaws.com', 'https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/', 'https://storage.googleapis.com/high-resolution-rapid-refresh']:
+        idx_url = create_grib_idx_url_path(
+            baseurl=baseurl,
+            timestamp=datetime.datetime.strptime(args.timestamp, '%Y-%m-%d %H:%M:%S%z'),
+            forecast_hour=args.forecast_hour,
+        )
+        async with aiohttp.ClientSession() as session:
+            r = await fetch(session, idx_url)
+        if r is not None:
+            break
+    gribidx = read_idx(r)
+    dlocs = get_byte_locs(gribidx=gribidx, variable=args.variable, level=args.level, forecast=args.forecast)
+    dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
+    download_files(idx_url=idx_url, out_dir=args.out_dir, cfg=list(zip(dlocs, dranges)))
 
 
 if __name__ == "__main__":
     """
-    Fetch subsets of HRRR sub-hourly forecast outputs.
+    Fetch subsets of NOAA model outputs.
 
     Examples
     ----------
-        python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -forecast_hour 6 -variable 'PRATE' -level 'surface' -out_dir '/tmp'
+        python get_gribs.py -timestamp '2021-03-30 03:15:00Z' -model 'HRRR' -forecast_hour 6 -variable 'PRATE' -level 'surface' -forecast 'min fcst' -out_dir '/tmp'
     """
-    parser = argparse.ArgumentParser(description="HRRR Grib downloader")
+    parser = argparse.ArgumentParser(description="Grib downloader")
     parser.add_argument(
         "-timestamp",
         type=str,
-        help="HRRR UTC date and time run to query, ie: '2021-03-30 03:15:00Z' ",
+        help="UTC date and time model run to query, ie: '2021-03-30 03:00:00Z' ",
     )
     parser.add_argument(
-        "-forecast_hour", type=int, help="HRRR forecast hour of model run to query"
+        "-model", type=str, help="NOAA model to query"
+    )
+    parser.add_argument(
+        "-forecast_hour", type=int, help="forecast hour of model run to query"
     )
     parser.add_argument(
         "-variable",
         default="PRATE",
         type=str,
-        help="HRRR variable to query",
+        help="variable to query",
         choices=[
             "REFC",
             "RETOP",
@@ -445,6 +442,17 @@ if __name__ == "__main__":
             "cloud ceiling",
             "cloud base",
             "top of atmosphere",
+        ],
+    )
+    parser.add_argument(
+        "-forecast",
+        default="min fcst",
+        type=str,
+        help="forecast type of the requested variable",
+        choices=[
+            "min acc fcst",
+            "min ave fcst",
+            "min fcst",
         ],
     )
     parser.add_argument(
