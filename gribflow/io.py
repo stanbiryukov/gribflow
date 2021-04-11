@@ -5,6 +5,7 @@ import re
 import shutil
 import urllib
 
+import aiofiles
 import aiohttp
 
 
@@ -18,18 +19,6 @@ async def fetch(session, url):
             return None
         elif response.status == 200:
             return await response.text()
-
-
-async def fetch_all(session, urls):
-    """
-    Create aiohttp requests for multiple urls.
-    """
-    tasks = []
-    for url in urls:
-        task = asyncio.create_task(fetch(session, url))
-        tasks.append(task)
-    results = await asyncio.gather(*tasks)
-    return results
 
 
 def create_grib_idx_url_path(baseurl: str, timestamp: datetime, forecast_hour: int):
@@ -76,33 +65,36 @@ def get_byte_ranges(dlocs: list, gribidx: list):
     return [(gribidx[x][2], gribidx[x + 1][2]) for x in dlocs]
 
 
-def download_grib_chunk(url: str, path: str, _range=None):
-    # print(f"Fetching: {url} with byte header: {_range} and saving to: {path}")
-    req = urllib.request.Request(url, method="GET")
-    if _range:
-        req.add_header("Range", _range)  # 'bytes=b0-b1)'
-    with urllib.request.urlopen(req) as response:
-        with open(path, "wb") as out_file:
-            shutil.copyfileobj(response, out_file)
+async def make_request(url, path, _range):
+    header = {"Range": f"bytes={_range}"}
+    async with aiohttp.ClientSession(headers=header) as session:
+        async with session.get(url=url) as resp:
+            f = await aiofiles.open(path, mode="wb")
+            await f.write(await resp.read())
+            await f.close()
 
 
-def download_files(args, idx_url: str, gribidx: list, cfg: list):
+async def download_files(args, idx_url: str, gribidx: list, cfg: list):
     """
-    Download the files and save a unique filename based on metadata collected.
+    Create aiohttp requests for all the grib chunks.
     """
     path_base = (
         "".join(idx_url.partition(args.model.lower())[1:])
         .replace(".grib2.idx", "")
         .replace("/", "")
     )
-    [
-        download_grib_chunk(
-            url=idx_url.replace(".idx", ""),
-            path=f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
-            _range=f"bytes={x[1][0]}-{x[1][1]}",
+    tasks = []
+    for x in cfg:
+        task = asyncio.create_task(
+            make_request(
+                url=idx_url.replace(".idx", ""),
+                path=f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
+                _range=f"{x[1][0]}-{x[1][1]}",
+            )
         )
-        for x in cfg
-    ]
+        tasks.append(task)
+    results = await asyncio.gather(*tasks)
+    return results
 
 
 def get_models():
@@ -142,7 +134,7 @@ async def main(args):
         forecast=args.forecast,
     )
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
-    download_files(
+    await download_files(
         args=args, idx_url=idx_url, gribidx=gribidx, cfg=list(zip(dlocs, dranges))
     )
 
