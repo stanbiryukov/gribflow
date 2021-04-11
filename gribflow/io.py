@@ -57,9 +57,9 @@ def read_idx(response):
     """
     i = 0
     data = []
-    lines = response.split(':\n')
+    lines = response.split(":\n")
     for line in lines:
-        line_ = line.split(':')
+        line_ = line.split(":")
         if len(line_) > 1:
             line_.insert(0, i)
             data.append(line_)
@@ -73,7 +73,11 @@ def get_byte_locs(gribidx: list, variable: str, level: str, forecast: str):
     first column is the 0..N index we created.
     """
     p = re.compile(r"(^[^A-Za-z]+)")
-    matches = [x[0] for x in gribidx if (x[4] == variable) & (x[5] == level) & ( p.sub('', x[6]) == forecast)]
+    matches = [
+        x[0]
+        for x in gribidx
+        if (x[4] == variable) & (x[5] == level) & (p.sub("", x[6]) == forecast)
+    ]
     return matches
 
 
@@ -81,7 +85,8 @@ def get_byte_ranges(dlocs: list, gribidx: list):
     """
     byte range is that row index's second column and ends with the next row's byte start.
     """
-    return [ (gribidx[x][2], gribidx[x+1][2]) for x in dlocs]
+    return [(gribidx[x][2], gribidx[x + 1][2]) for x in dlocs]
+
 
 def download_grib_chunk(url: str, path: str, _range=None):
     # print(f"Fetching: {url} with byte header: {_range} and saving to: {path}")
@@ -97,11 +102,15 @@ def download_files(args, idx_url: str, gribidx: list, cfg: list):
     """
     Download the files and save a unique filename based on metadata collected.
     """
-    path_base = ''.join(idx_url.partition(args.model.lower())[1:]).replace('.grib2.idx','').replace('/','')
+    path_base = (
+        "".join(idx_url.partition(args.model.lower())[1:])
+        .replace(".grib2.idx", "")
+        .replace("/", "")
+    )
     [
         download_grib_chunk(
             url=idx_url.replace(".idx", ""),
-            path = f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
+            path=f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
             _range=f"bytes={x[1][0]}-{x[1][1]}",
         )
         for x in cfg
@@ -334,10 +343,14 @@ class FastGrib:
 
 
 async def main(args):
-    for baseurl in ['https://noaa-hrrr-bdp-pds.s3.amazonaws.com', 'https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/', 'https://storage.googleapis.com/high-resolution-rapid-refresh']:
+    for baseurl in [
+        "https://noaa-hrrr-bdp-pds.s3.amazonaws.com",
+        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/",
+        "https://storage.googleapis.com/high-resolution-rapid-refresh",
+    ]:
         idx_url = create_grib_idx_url_path(
             baseurl=baseurl,
-            timestamp=datetime.datetime.strptime(args.timestamp, '%Y-%m-%d %H:%M:%S%z'),
+            timestamp=datetime.datetime.strptime(args.timestamp, "%Y-%m-%d %H:%M:%S%z"),
             forecast_hour=args.forecast_hour,
         )
         async with aiohttp.ClientSession() as session:
@@ -345,9 +358,16 @@ async def main(args):
         if r is not None:
             break
     gribidx = read_idx(r)
-    dlocs = get_byte_locs(gribidx=gribidx, variable=args.variable, level=args.level, forecast=args.forecast)
+    dlocs = get_byte_locs(
+        gribidx=gribidx,
+        variable=args.variable,
+        level=args.level,
+        forecast=args.forecast,
+    )
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
-    download_files(args=args, idx_url=idx_url, gribidx=gribidx, cfg=list(zip(dlocs, dranges)))
+    download_files(
+        args=args, idx_url=idx_url, gribidx=gribidx, cfg=list(zip(dlocs, dranges))
+    )
 
 
 if __name__ == "__main__":
@@ -362,18 +382,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "-timestamp",
         type=str,
+        required=True,
         help="UTC date and time model run to query, ie: '2021-03-30 03:00:00Z' ",
     )
+    parser.add_argument("-model", type=str, required=True, help="NOAA model to query")
     parser.add_argument(
-        "-model", type=str, help="NOAA model to query"
-    )
-    parser.add_argument(
-        "-forecast_hour", type=int, help="forecast hour of model run to query"
+        "-forecast_hour",
+        type=int,
+        required=True,
+        help="forecast hour of model run to query",
     )
     parser.add_argument(
         "-variable",
         default="PRATE",
         type=str,
+        required=True,
         help="variable to query",
         choices=[
             "REFC",
@@ -418,6 +441,7 @@ if __name__ == "__main__":
         "-level",
         default="surface",
         type=str,
+        required=True,
         help="level of the requested variable",
         choices=[
             "entire atmosphere",
@@ -438,6 +462,7 @@ if __name__ == "__main__":
         "-forecast",
         default="min fcst",
         type=str,
+        required=True,
         help="forecast type of the requested variable",
         choices=[
             "min acc fcst",
@@ -446,7 +471,11 @@ if __name__ == "__main__":
         ],
     )
     parser.add_argument(
-        "-out_dir", default="/tmp", type=str, help="directory to save grib files"
+        "-out_dir",
+        default="/tmp",
+        type=str,
+        required=True,
+        help="directory to save grib files",
     )
     args = parser.parse_args()
     asyncio.run(main(args))
