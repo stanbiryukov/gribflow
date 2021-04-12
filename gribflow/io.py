@@ -64,6 +64,7 @@ def get_byte_ranges(dlocs: list, gribidx: list):
 
 async def make_request(url, path, _range):
     header = {"Range": f"bytes={_range}"}
+    # print(f"Fetching {url} to {path}")
     async with aiohttp.ClientSession(headers=header) as session:
         async with session.get(url=url) as resp:
             with open(path, "wb") as f:
@@ -71,20 +72,22 @@ async def make_request(url, path, _range):
                     f.write(chunk)
 
 
-async def download_files(args, idx_url: str, gribidx: list, cfg: list):
+async def download_files(
+    model: str, out_dir: str, idx_url: str, gribidx: list, cfg: list
+):
     """
     Create aiohttp requests for all the grib chunks.
     """
     path_base = (
-        "".join(idx_url.partition(args.model.lower())[1:])
-        .replace(".grib2.idx", "")
+        "".join(idx_url.partition(model.lower())[1:])
         .replace("/", "")
+        .split(".grib", 1)[0]
     )
     tasks = [
         asyncio.create_task(
             make_request(
                 url=idx_url.replace(".idx", ""),
-                path=f"{args.out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
+                path=f"{out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
                 _range=f"{x[1][0]}-{x[1][1]}",
             )
         )
@@ -99,16 +102,24 @@ def get_models():
         "hrrr": {
             "products": {
                 "wrfsubhf": {
-                    "time_delta": "1 hour",
+                    "run_hour_delta": 1,
                 }
             }
         },
-        "gfs": {"products": {"atmos": {"time_delta": "6 hours"}}},
+        "gfs": {"products": {"atmos": {"run_hour_delta": 6}}},
     }
     return models
 
 
-async def main(args):
+async def get_gribs(
+    timestamp: datetime,
+    forecast_hour: int,
+    model: str,
+    variable: str,
+    level: str,
+    forecast: str,
+    out_dir: str,
+):
     for baseurl in [
         "https://noaa-hrrr-bdp-pds.s3.amazonaws.com",
         "https://storage.googleapis.com/high-resolution-rapid-refresh",
@@ -116,8 +127,8 @@ async def main(args):
     ]:
         idx_url = create_grib_idx_url_path(
             baseurl=baseurl,
-            timestamp=datetime.datetime.strptime(args.timestamp, "%Y-%m-%d %H:%M:%S%z"),
-            forecast_hour=args.forecast_hour,
+            timestamp=datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S%z"),
+            forecast_hour=forecast_hour,
         )
         async with aiohttp.ClientSession() as session:
             r = await fetch(session, idx_url)
@@ -126,13 +137,17 @@ async def main(args):
     gribidx = read_idx(r)
     dlocs = get_byte_locs(
         gribidx=gribidx,
-        variable=args.variable,
-        level=args.level,
-        forecast=args.forecast,
+        variable=variable,
+        level=level,
+        forecast=forecast,
     )
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
     await download_files(
-        args=args, idx_url=idx_url, gribidx=gribidx, cfg=list(zip(dlocs, dranges))
+        model=model,
+        out_dir=out_dir,
+        idx_url=idx_url,
+        gribidx=gribidx,
+        cfg=list(zip(dlocs, dranges)),
     )
 
 
@@ -142,7 +157,7 @@ if __name__ == "__main__":
 
     Examples
     ----------
-        python get_gribs.py -model 'HRRR' -timestamp '2021-04-01 03:00:00Z' -forecast_hour 3 -variable 'PRATE' -level 'surface' -forecast 'min fcst' -out_dir '/tmp'
+        python io.py -timestamp '2021-04-01 03:00:00Z' -model 'HRRR' -forecast_hour 3 -variable 'PRATE' -level 'surface' -forecast 'min fcst' -out_dir '/tmp'
     """
     parser = argparse.ArgumentParser(description="Grib downloader")
     parser.add_argument(
@@ -187,4 +202,14 @@ if __name__ == "__main__":
         help="directory to save grib files",
     )
     args = parser.parse_args()
-    asyncio.run(main(args))
+    asyncio.run(
+        get_gribs(
+            timestamp=args.timestamp,
+            forecast_hour=args.forecast_hour,
+            model=args.model,
+            variable=args.variable,
+            level=args.level,
+            forecast=args.forecast,
+            out_dir=args.out_dir,
+        )
+    )
