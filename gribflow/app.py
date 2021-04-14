@@ -99,4 +99,6 @@ async def get_data(epoch: int, model: str, product: str, file: str, variable: st
 
     shutil.rmtree(tempdir)
 
-    return {'start_file': filelower, 'end_file': fileupper, 'timestamp': mytime, 'array': encode_array(np.array(hat))}
+    hat = np.array(hat)
+
+    return {'start_file': filelower, 'end_file': fileupper, 'timestamp': mytime, 'shape': hat.shape, 'array': encode_array(hat)}

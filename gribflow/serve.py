@@ -72,19 +72,20 @@ def closest_time_point(array, values, n, method='floor'):
     dist = np.abs(np.subtract.outer(mtch_locs[:, -1], values)) 
     return mtch_locs[np.argpartition(dist, n)[:n]]
 
-def encode_array(array, compressor=partial(blosc.pack_array, cname="lz4")):
+
+def encode_array(array, compressor=partial(blosc.compress, cname="lz4")):
     """
     Compressor numpy array to json-safe string
     """
-    cdata = base64.urlsafe_b64encode(compressor(array)).decode("utf-8")
+    cdata = base64.urlsafe_b64encode(compressor(np.array(array).astype(np.float64))).decode("utf-8")
     return cdata
 
 
-def decode_array(cdata, compressor=blosc.unpack_array):
+def decode_array(cdata, shape, compressor=blosc.decompress):
     """
     Decode string to bytes and uncompress to numpy array
     """
-    data = compressor(base64.urlsafe_b64decode(cdata))
+    data = np.frombuffer(compressor(base64.urlsafe_b64decode(cdata)), dtype=np.float64).reshape(shape)
     return data
 
 
@@ -107,7 +108,7 @@ def resize(jar, shape, method='bicubic'):
     return jax.image.resize(jar, shape=shape, method=method)
 
 
-def get_file_valid_times(mytime: datetime, cfg: dict, n_run_searches: Optional[int] = 48):
+def get_file_valid_times(mytime: datetime, cfg: dict, n_run_searches: Optional[int] = 96):
     # round provided epoch time to nearest run file.
     mytime_floor = round_datetime(mytime, secperiod=cfg['run_hour_delta'] * 60 * 60, method='floor').replace(tzinfo=None)
     mytime_ceil = round_datetime(mytime, secperiod=cfg['run_hour_delta'] * 60 * 60, method='ceil').replace(tzinfo=None)
