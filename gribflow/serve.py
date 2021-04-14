@@ -100,7 +100,7 @@ def interpolate(ar1, ar2, tws, flow_ar=None):
         gray2 = np_to_gray(ar2, floor=armin, ceil=armax)
         flow_ar = calc_opt_flow(gray1, gray2)
     hat = interpolate_frames(ar1, ar2, flow_ar, tws=tws)
-    return jnp.stack(hat)
+    return np.stack(hat).squeeze(axis=0)
 
 def resize(jar, shape, method='tricubic'):
     return jax.image.resize(jar, shape=shape, method=method)

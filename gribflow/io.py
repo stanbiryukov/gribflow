@@ -52,7 +52,7 @@ def get_byte_locs(gribidx: list, variable: str, level: str, forecast: str):
     matches = [
         x[0]
         for x in gribidx
-        if (x[4].lower() == variable.lower()) & (x[5].lower() == level.lower()) & ( bool(re.match(f"{forecast}", p.sub("", x[6]).replace(" ", "").lower())) == True)
+        if (x[4].lower() == variable.lower()) & (x[5].lower() == level.lower()) & (p.sub("", x[6]).replace(" ", "").lower() == forecast.lower())
     ]
     return matches
 
@@ -128,7 +128,7 @@ def get_models():
                                 "run_hour_delta": 6,
                                 "fcst_hour_delta": 1,
                                 "max_hour_fcst": 378,
-                                "within_file_timesteps": [datetime.timedelta(seconds=0),]
+                                "within_file_timesteps": [datetime.timedelta(hours=1),]
                             },
                         },
                     },
@@ -181,7 +181,6 @@ async def get_gribs(
         level=level,
         forecast=forecast,
     )
-    print(dlocs)
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
     results = await download_files(
         model=model,
@@ -196,11 +195,11 @@ async def get_gribs(
 if __name__ == "__main__":
     """
     Fetch subsets of NOAA model outputs.
-    Note gribs with forecast of 0 hours are the instantaneous forecast and are encoded with 'anl' and not the typical min/hour fcst var. 
+
     Examples
     ----------
-        python3 io.py -model 'hrrr' -product 'conus' -file 'wrfsubhf' -timestamp '2021-04-11 11:00:00' -forecast_hour 1 -variable 'PRATE' -level 'surface' -forecast 'minfcst|anl' -out_dir '/tmp'
-        python3 io.py -model 'gfs' -product 'atmos' -file 'pgrb2.0p25' -timestamp '2021-04-11 12:00:00' -forecast_hour 6 -variable 'TMP' -level 'surface' -forecast 'hourfcst|anl' -out_dir '/tmp'
+        python3 io.py -model 'hrrr' -product 'conus' -file 'wrfsubhf' -timestamp '2021-04-11 11:00:00' -forecast_hour 1 -variable 'PRATE' -level 'surface' -forecast 'minfcst' -out_dir '/tmp'
+        python3 io.py -model 'gfs' -product 'atmos' -file 'pgrb2.0p25' -timestamp '2021-04-11 12:00:00' -forecast_hour 6 -variable 'TMP' -level 'surface' -forecast 'hourfcst' -out_dir '/tmp'
     """
     parser = argparse.ArgumentParser(description="Grib downloader")
     parser.add_argument(
@@ -234,10 +233,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-forecast",
-        default="minfcst|anl",
+        default="min fcst",
         type=str,
         required=True,
-        help="forecast type regex pattern of the requested variable",
+        help="forecast type of the requested variable",
     )
     parser.add_argument(
         "-out_dir",
