@@ -12,6 +12,7 @@ from gribflow.flow import np_to_gray, calc_opt_flow, interpolate_frames
 import jax.numpy as jnp
 import jax
 import itertools
+from typing import Optional
 
 def to_epoch(x: datetime):
     """
@@ -106,13 +107,13 @@ def resize(jar, shape, method='bicubic'):
     return jax.image.resize(jar, shape=shape, method=method)
 
 
-def get_file_valid_times(mytime: datetime, cfg: dict):
+def get_file_valid_times(mytime: datetime, cfg: dict, n_run_searches: Optional[int] = 48):
     # round provided epoch time to nearest run file.
     mytime_floor = round_datetime(mytime, secperiod=cfg['run_hour_delta'] * 60 * 60, method='floor').replace(tzinfo=None)
     mytime_ceil = round_datetime(mytime, secperiod=cfg['run_hour_delta'] * 60 * 60, method='ceil').replace(tzinfo=None)
-    # go back up to 24 model runs
-    previous_range = [mytime_floor - datetime.timedelta(hours=cfg['run_hour_delta'] * x) for x in range(1, 25)]
-    next_range = [mytime_ceil + datetime.timedelta(hours=cfg['run_hour_delta'] * x) for x in range(1, 25)]
+    # go back up to n_run_searches model runs
+    previous_range = [mytime_floor - datetime.timedelta(hours=cfg['run_hour_delta'] * x) for x in range(1, n_run_searches)]
+    next_range = [mytime_ceil + datetime.timedelta(hours=cfg['run_hour_delta'] * x) for x in range(1, n_run_searches)]
     file_range = previous_range + next_range
     # product of mydate, the within file time steps, and all the forecast hours for the run
     # ['model_run', 'forecast_time', 'within_file_time']

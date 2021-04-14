@@ -120,7 +120,7 @@ def get_models():
         },
         "gfs": {
             "url": "gfs.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/{timestamp.hour:02d}/{product}/gfs.t{timestamp.hour:02d}z.{file}.f{forecast_hour:03d}",
-            "base_urls": ["https://noaa-gfs-bdp-pds.s3.amazonaws.com"],
+            "base_urls": ["https://noaa-gfs-bdp-pds.s3.amazonaws.com", "https://storage.googleapis.com/global-forecast-system"],
             "products": {
                 "atmos": {
                         "files": {

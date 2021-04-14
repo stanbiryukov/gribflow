@@ -11,6 +11,7 @@ from typing import Optional
 import re
 import shutil
 import tempfile
+import glob
 
 app = FastAPI()
 
@@ -25,21 +26,19 @@ async def get_data(epoch: int, model: str, product: str, file: str, variable: st
 
     cfg = get_models()[model.lower()]
     cfg = cfg['products'][product.lower()]['files'][file.lower()]
-    # cfg = get_models()['hrrr'.lower()]
-    # cfg = cfg['products']['conus'.lower()]['files']['wrfsubhf'.lower()]
     mytime = from_epoch(epoch)
-    candidates = get_file_valid_times(mytime = mytime, cfg = cfg)
-
-    rng = np.random.default_rng(123)
-
-    rng.shuffle(candidates['first'], axis=0)
-    rng.shuffle(candidates['last'], axis=0)
+    
+    # grab candidate files
+    candidates = get_file_valid_times(mytime = mytime, cfg = cfg, n_run_searches = 96)
+    max_range = min(len(candidates['first']), len(candidates['last']))
+    
+    # initialize placeholders as we attempt to download most relevant files.
     best_lower_delta = -np.inf
     best_upper_delta = np.inf
 
     tempdir = tempfile.mkdtemp()
 
-    for i in range(0, 5):
+    for i in range(0, max_range):
         try:
             # the datetime of the model + the forecast hour
             file_queries = (candidates['first'][i,0], int(candidates['first'][i,1].total_seconds() / (60 * 60))), (candidates['last'][i,0], int(candidates['last'][i,1].total_seconds() / (60 * 60)))
@@ -56,14 +55,11 @@ async def get_data(epoch: int, model: str, product: str, file: str, variable: st
                     out_dir=tempdir,
                 )
 
-            # combine if multiple lists
-            if any(isinstance(x, list) for x in grib_files):
-                grib_files = sum(grib_files, [])
-
+            # get all downloaded files if loop continues
+            grib_files = glob.glob(f"{tempdir}/*.grib*")
             # get hdrs
             hdrs = [_read_headers(x) for x in grib_files]
             hdrs_valid_times = [datetime.datetime.strptime(f"{x[5]} {x[6]:02d}", "%Y%m%d %H%M") for x in hdrs]
-            print(hdrs_valid_times)
             # sort on delta
             lower = min([ x for x in hdrs_valid_times if x < mytime.replace(tzinfo=None)], key=lambda x:abs(x-mytime.replace(tzinfo=None)))
             lower_delta = (lower - mytime.replace(tzinfo=None)).total_seconds()
@@ -78,24 +74,17 @@ async def get_data(epoch: int, model: str, product: str, file: str, variable: st
                 best_upper = upper
                 best_upper_delta = upper_delta
 
-            print(f"upper {upper} upper_delta {upper_delta} best_upper {best_upper} best_upper_delta {best_upper_delta}")
-
         except Exception as e:
             print(e)
             continue
 
         break
-        # print(f"lower {lower} lower_delta {lower_delta} best_lower {best_lower} best_lower_delta {best_lower_delta}")
 
-    shutil.rmtree(tempdir)
-    return [best_lower, lower, best_upper, upper ]
+    # now get those matching grib files
+    filelower = grib_files[hdrs_valid_times.index(best_lower)]
+    fileupper = grib_files[hdrs_valid_times.index(best_upper)]
 
-    '''
-    # get the matching grib files
-    filelower = grib_files[hdrs_valid_times.index(lower)]
-    fileupper = grib_files[hdrs_valid_times.index(upper)]
-
-    target_tw = get_tws(target = epoch, start = to_epoch(lower), end = to_epoch(upper)) 
+    target_tw = get_tws(target = epoch, start = to_epoch(best_lower), end = to_epoch(best_upper)) 
 
     x1 = _read_vals(filelower)
     x2 = _read_vals(fileupper)
@@ -103,10 +92,11 @@ async def get_data(epoch: int, model: str, product: str, file: str, variable: st
     hat = interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
 
     if xy:
-        # parse size if provided
+        # parse size if provided and interpolate
         x, y = re.findall(r'\d+', xy)
         x, y = int(x), int(y)
         hat = resize(hat, shape=(y, x), method=method)
 
-    return {'start_file': filelower, 'end_file': fileupper, 'time_weight': target_tw, 'array':  encode_array(np.array(hat))}
-    '''
+    shutil.rmtree(tempdir)
+
+    return {'start_file': filelower, 'end_file': fileupper, 'timestamp': mytime, 'array': encode_array(np.array(hat))}
