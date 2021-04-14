@@ -11,7 +11,7 @@ import numpy as np
 from gribflow.flow import np_to_gray, calc_opt_flow, interpolate_frames
 import jax.numpy as jnp
 import jax
-
+import itertools
 
 def to_epoch(x: datetime):
     """
@@ -100,10 +100,40 @@ def interpolate(ar1, ar2, tws, flow_ar=None):
         gray2 = np_to_gray(ar2, floor=armin, ceil=armax)
         flow_ar = calc_opt_flow(gray1, gray2)
     hat = interpolate_frames(ar1, ar2, flow_ar, tws=tws)
-    return np.stack(hat).squeeze(axis=0)
+    return jnp.stack(hat).squeeze(axis=0)
 
-def resize(jar, shape, method='tricubic'):
+def resize(jar, shape, method='bicubic'):
     return jax.image.resize(jar, shape=shape, method=method)
+
+
+def get_file_valid_times(mytime: datetime, cfg: dict):
+    # round provided epoch time to nearest run file.
+    mytime_floor = round_datetime(mytime, secperiod=cfg['run_hour_delta'] * 60 * 60, method='floor').replace(tzinfo=None)
+    mytime_ceil = round_datetime(mytime, secperiod=cfg['run_hour_delta'] * 60 * 60, method='ceil').replace(tzinfo=None)
+    # go back up to 24 model runs
+    previous_range = [mytime_floor - datetime.timedelta(hours=cfg['run_hour_delta'] * x) for x in range(1, 25)]
+    next_range = [mytime_ceil + datetime.timedelta(hours=cfg['run_hour_delta'] * x) for x in range(1, 25)]
+    file_range = previous_range + next_range
+    # product of mydate, the within file time steps, and all the forecast hours for the run
+    # ['model_run', 'forecast_time', 'within_file_time']
+    cart = np.array(list(itertools.product(file_range, [datetime.timedelta(hours=x) for x in range(1, cfg['max_hour_fcst']+1)], cfg['within_file_timesteps'])))
+    # compute valid time
+    cart_valid = cart[:,0] + cart[:,1] - datetime.timedelta(hours=cfg['fcst_hour_delta']) + cart[:,2]
+    # delta to mytime
+    delta = cart_valid - mytime.replace(tzinfo=None)
+    cart_valid = np.concatenate( [cart, cart_valid.reshape(-1,1), delta.reshape(-1,1)], axis=1)
+    # sort on delta
+    cart_valid = cart_valid[cart_valid[:, -1].argsort()]
+    # find closest points to time and split into before and after
+    idx = np.searchsorted(cart_valid[:,-2], mytime.replace(tzinfo=None))
+    candidates = {'first': cart_valid[0:idx], 'last': cart_valid[idx:]}
+    # sort for best available. minimum delta and smaller forecast time
+    ind = np.lexsort((candidates['last'][:, 0], candidates['last'][:, 1], candidates['last'][:, -1]))
+    candidates['last'] = candidates['last'][ind]
+    # descending order for delta of first candidates
+    ind = np.lexsort((candidates['first'][:, 0], candidates['first'][:, 1], -candidates['first'][:, -1]))
+    candidates['first'] = candidates['first'][ind]
+    return candidates
 
 
 async def get_forecast_gribs(

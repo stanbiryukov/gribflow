@@ -6,6 +6,7 @@ gunicorn
 opencv-python
 opencv-contrib-python
 jax
+jaxlib
 pandas
 Pillow
 uvicorn[standard]

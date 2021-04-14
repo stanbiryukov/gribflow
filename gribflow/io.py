@@ -23,7 +23,7 @@ def create_grib_idx_url_path(baseurl: str, url: str, product: str, file: str, ti
     Given a date and forecast hour return the expected grib.idx filepath
     """
     url = url.format(timestamp=timestamp, product=product, file=file, forecast_hour=forecast_hour)
-    print(f"{baseurl}/{url}.idx")
+    # print(f"{baseurl}/{url}.idx")
     return f"{baseurl}/{url}.idx"
 
 
