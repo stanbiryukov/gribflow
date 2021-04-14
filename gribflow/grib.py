@@ -230,3 +230,22 @@ class FastGrib:
             lons = lons.reshape(ny, nx)
             vals = vals.reshape(ny, nx)
         return lats, lons, vals
+
+
+def _read_headers(file, fgrib=FastGrib()):
+    '''
+    Partial utility function to read headers of many grib files.
+    '''
+    with open(file, "rb") as f:
+        hdrs = fgrib.get_headers(f.read())
+    return hdrs
+
+
+def _read_vals(file, fgrib=FastGrib()):
+    '''
+    Partial utility function to read values of many grib files.
+    '''
+    with open(file, "rb") as f:
+        lats, lons, vals = fgrib.get_values(f.read())
+    return vals
+

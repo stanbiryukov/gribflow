@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import datetime
 import re
-
+import datetime
 import aiohttp
 
 
@@ -18,11 +18,13 @@ async def fetch(session, url):
             return await response.text()
 
 
-def create_grib_idx_url_path(baseurl: str, timestamp: datetime, forecast_hour: int):
+def create_grib_idx_url_path(baseurl: str, url: str, product: str, file: str, timestamp: datetime, forecast_hour: int):
     """
-    Given a date and forecast hour return the expected grib.idx filepath on the open data S3 bucket for HRRR `wrfsubh` file.
+    Given a date and forecast hour return the expected grib.idx filepath
     """
-    return f"{baseurl}/hrrr.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/conus/hrrr.t{timestamp.hour:02d}z.wrfsubhf{str(forecast_hour).zfill(2)}.grib2.idx"
+    url = url.format(timestamp=timestamp, product=product, file=file, forecast_hour=forecast_hour)
+    print(f"{baseurl}/{url}.idx")
+    return f"{baseurl}/{url}.idx"
 
 
 def read_idx(response):
@@ -50,7 +52,7 @@ def get_byte_locs(gribidx: list, variable: str, level: str, forecast: str):
     matches = [
         x[0]
         for x in gribidx
-        if (x[4] == variable) & (x[5] == level) & (p.sub("", x[6]) == forecast)
+        if (x[4].lower() == variable.lower()) & (x[5].lower() == level.lower()) & ( bool(re.match(f"{forecast}", p.sub("", x[6]).replace(" ", "").lower())) == True)
     ]
     return matches
 
@@ -70,7 +72,7 @@ async def make_request(url, path, _range):
             with open(path, "wb") as f:
                 async for chunk in resp.content.iter_chunked(4096):
                     f.write(chunk)
-
+    return path
 
 async def download_files(
     model: str, out_dir: str, idx_url: str, gribidx: list, cfg: list
@@ -81,6 +83,7 @@ async def download_files(
     path_base = (
         "".join(idx_url.partition(model.lower())[1:])
         .replace("/", "")
+        .replace("idx", "")
         .split(".grib", 1)[0]
     )
     tasks = [
@@ -100,34 +103,71 @@ async def download_files(
 def get_models():
     models = {
         "hrrr": {
+            "url": "hrrr.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/{product}/hrrr.t{timestamp.hour:02d}z.{file}{forecast_hour:02d}.grib2",
+            "base_urls": ["https://noaa-hrrr-bdp-pds.s3.amazonaws.com", "https://storage.googleapis.com/high-resolution-rapid-refresh", "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod"],
             "products": {
-                "wrfsubhf": {
-                    "run_hour_delta": 1,
-                }
-            }
+                "conus": {
+                    "files": {
+                        "wrfsubhf": {
+                            "run_hour_delta": 1, # difference b/w model UTC runs in hours
+                            "fcst_hour_delta": 1, # difference b/w forecast files in hours
+                            "max_hour_fcst": 18, # max forecast time out
+                            "within_file_timesteps": [datetime.timedelta(minutes=15), datetime.timedelta(minutes=30), datetime.timedelta(minutes=45), datetime.timedelta(minutes=60)],
+                        }
+                    },
+                },
+            },
         },
-        "gfs": {"products": {"atmos": {"run_hour_delta": 6}}},
-    }
+        "gfs": {
+            "url": "gfs.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/{timestamp.hour:02d}/{product}/gfs.t{timestamp.hour:02d}z.{file}.f{forecast_hour:03d}",
+            "base_urls": ["https://noaa-gfs-bdp-pds.s3.amazonaws.com"],
+            "products": {
+                "atmos": {
+                        "files": {
+                            "pgrb2.0p25": {
+                                "run_hour_delta": 6,
+                                "fcst_hour_delta": 1,
+                                "max_hour_fcst": 378,
+                                "within_file_timesteps": [datetime.timedelta(seconds=0),]
+                            },
+                        },
+                    },
+                },
+            },
+        }
     return models
+
+
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+
+def natural_keys(text):
+    '''
+    alist.sort(key=natural_keys) sorts list in human order
+    '''
+    return [ atoi(c) for c in re.split(r'(\d+)', text) ]
 
 
 async def get_gribs(
     timestamp: datetime,
     forecast_hour: int,
     model: str,
+    product: str,
+    file: str,
     variable: str,
     level: str,
     forecast: str,
     out_dir: str,
 ):
-    for baseurl in [
-        "https://noaa-hrrr-bdp-pds.s3.amazonaws.com",
-        "https://storage.googleapis.com/high-resolution-rapid-refresh",
-        "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod",
-    ]:
+    cfg = get_models()[model.lower()]
+    for baseurl in cfg['base_urls']:
         idx_url = create_grib_idx_url_path(
             baseurl=baseurl,
-            timestamp=datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S%z"),
+            url=cfg['url'],
+            product=product.lower(),
+            file=file.lower(),
+            timestamp=datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S"),
             forecast_hour=forecast_hour,
         )
         async with aiohttp.ClientSession() as session:
@@ -141,32 +181,37 @@ async def get_gribs(
         level=level,
         forecast=forecast,
     )
+    print(dlocs)
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
-    await download_files(
+    results = await download_files(
         model=model,
         out_dir=out_dir,
         idx_url=idx_url,
         gribidx=gribidx,
         cfg=list(zip(dlocs, dranges)),
     )
+    return results
 
 
 if __name__ == "__main__":
     """
     Fetch subsets of NOAA model outputs.
-
+    Note gribs with forecast of 0 hours are the instantaneous forecast and are encoded with 'anl' and not the typical min/hour fcst var. 
     Examples
     ----------
-        python io.py -timestamp '2021-04-01 03:00:00Z' -model 'HRRR' -forecast_hour 3 -variable 'PRATE' -level 'surface' -forecast 'min fcst' -out_dir '/tmp'
+        python3 io.py -model 'hrrr' -product 'conus' -file 'wrfsubhf' -timestamp '2021-04-11 11:00:00' -forecast_hour 1 -variable 'PRATE' -level 'surface' -forecast 'minfcst|anl' -out_dir '/tmp'
+        python3 io.py -model 'gfs' -product 'atmos' -file 'pgrb2.0p25' -timestamp '2021-04-11 12:00:00' -forecast_hour 6 -variable 'TMP' -level 'surface' -forecast 'hourfcst|anl' -out_dir '/tmp'
     """
     parser = argparse.ArgumentParser(description="Grib downloader")
     parser.add_argument(
         "-timestamp",
         type=str,
         required=True,
-        help="UTC date and time model run to query, ie: '2021-03-30 03:00:00Z' ",
+        help="UTC date and time model run to query, ie: '2021-03-30 03:00:00' ",
     )
-    parser.add_argument("-model", type=str, required=True, help="NOAA model to query")
+    parser.add_argument("-model", type=str, default="hrrr", required=True, help="NOAA model to query")
+    parser.add_argument("-product", type=str, default="conus", required=True, help="NOAA model product to query. Ex: 'conus', 'atmos'")
+    parser.add_argument("-file", type=str, default="conus", required=True, help="NOAA model product file to query. Ex: 'wrfsubhf', 'pgrb2.0p25'")
     parser.add_argument(
         "-forecast_hour",
         type=int,
@@ -189,10 +234,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-forecast",
-        default="min fcst",
+        default="minfcst|anl",
         type=str,
         required=True,
-        help="forecast type of the requested variable",
+        help="forecast type regex pattern of the requested variable",
     )
     parser.add_argument(
         "-out_dir",
@@ -207,6 +252,8 @@ if __name__ == "__main__":
             timestamp=args.timestamp,
             forecast_hour=args.forecast_hour,
             model=args.model,
+            product=args.product,
+            file=args.file,
             variable=args.variable,
             level=args.level,
             forecast=args.forecast,
