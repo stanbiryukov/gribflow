@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from gribflow.serve import encode_array, decode_array, from_epoch, get_forecast_gribs, round_datetime, get_tws, to_epoch, interpolate, resize, get_file_valid_times
+from gribflow.flow import inpaint
 from gribflow.io import get_models, get_gribs, natural_keys
 from gribflow.grib import _read_headers, _read_vals
 import json
@@ -21,7 +22,7 @@ def read_root():
 
 
 @app.get("/data/{model}/{product}/{file}/{variable}/{level}/{forecast}/{epoch}")
-async def get_data(epoch: int, model: str, product: str, file: str, variable: str, level: str, forecast: str, xy: Optional[str] = None, method: Optional[str] = 'bilinear'):
+async def get_data(epoch: int, model: str, product: str, file: str, variable: str, level: str, forecast: str, xy: Optional[str] = None, method: Optional[str] = 'bicubic'):
     # return {"epoch": epoch, "model": model, "product": product, "file": file, "variable": variable, "level": level, "forecast": forecast}
 
     cfg = get_models()[model.lower()]
@@ -95,7 +96,8 @@ async def get_data(epoch: int, model: str, product: str, file: str, variable: st
         # parse size if provided and interpolate
         x, y = re.findall(r'\d+', xy)
         x, y = int(x), int(y)
-        hat = resize(hat, shape=(y, x), method=method)
+        # fillnans as jax does not like interpolating with them
+        hat = resize(inpaint(np.array(hat)), shape=(y, x), method=method)
 
     shutil.rmtree(tempdir)
 
