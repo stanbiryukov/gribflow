@@ -1,4 +1,5 @@
 aiohttp
+aiosqlite
 asyncio
 blosc
 fastapi
@@ -9,4 +10,5 @@ jax
 jaxlib
 pandas
 Pillow
-uvicorn[standard]
+python-dateutil
+uvicorn

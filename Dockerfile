@@ -1,28 +1,5 @@
-FROM condaforge/mambaforge:4.9.2-5 as build
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.8-slim
 ENV DEBIAN_FRONTEND=noninteractive
-
-# lib requirements
-RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    software-properties-common \
-    build-essential \
-    libssl-dev \
-  && apt-get autoremove -y \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-COPY environment.yaml .
-RUN mamba env create -f environment.yaml
-# Install conda-pack:
-RUN mamba install -c conda-forge conda-pack==0.6.0
-# Use conda-pack to create a standalone env in /venv:
-RUN conda-pack -n python3 -o /tmp/env.tar && \
-    mkdir /venv && cd /venv && tar xf /tmp/env.tar && \
-    rm /tmp/env.tar && \
-    /venv/bin/conda-unpack
-
-# Distro
-FROM ubuntu:20.04
-ENV DEBIAN_FRONTEND=noninteractive
-COPY --from=build /venv /venv
 # lib requirements
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
     python3-opencv \
@@ -34,15 +11,8 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# switch from /bin/sh to /bin/bash
-SHELL ["/bin/bash", "-c"]
-# ENTRYPOINT source /venv/bin/activate
-# make sure env is activated on entry
-RUN echo -e "\
-source /venv/bin/activate \n\
-" >> ~/.bashrc
-
 # install gribflow
-WORKDIR /app
 COPY . /app
-RUN /venv/bin/python3 /app/setup.py install
+RUN python3 /app/setup.py install
+# expects fastapi as main.py in /app
+RUN cp /app/gribflow/app.py /app/main.py
