@@ -131,11 +131,11 @@ def get_file_valid_times(
     # go back up to n_run_searches model runs
     previous_range = [
         mytime_floor - datetime.timedelta(hours=cfg["run_hour_delta"] * x)
-        for x in range(1, n_run_searches)
+        for x in range(0, n_run_searches)
     ]
     next_range = [
         mytime_ceil + datetime.timedelta(hours=cfg["run_hour_delta"] * x)
-        for x in range(1, n_run_searches)
+        for x in range(0, n_run_searches)
     ]
     file_range = previous_range + next_range
     # product of mydate, the within file time steps, and all the forecast hours for the run
