@@ -121,9 +121,10 @@ def resize(jar, shape, method="bicubic"):
 def get_file_valid_times(
     mytime: datetime, cfg: dict, n_run_searches: Optional[int] = 96
 ):
-    # round provided epoch time to nearest run file.
+    # round provided time to nearest run file.
+    cdatetime = datetime.datetime.utcnow()
     mytime_floor = round_datetime(
-        mytime, secperiod=cfg["run_hour_delta"] * 60 * 60, method="floor"
+        min([cdatetime.replace(tzinfo=None), mytime.replace(tzinfo=None)]), secperiod=cfg["run_hour_delta"] * 60 * 60, method="floor"
     ).replace(tzinfo=None)
     # go back up to n_run_searches model runs
     file_range = [
