@@ -66,6 +66,7 @@ async def get_data(
                 int(candidates["last"][i, 1].total_seconds() / (60 * 60)),
             )
             file_queries = list(set(file_queries))
+
             grib_files = await get_forecast_gribs(
                 time_queries=file_queries,
                 model=model,

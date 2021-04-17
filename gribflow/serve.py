@@ -125,19 +125,11 @@ def get_file_valid_times(
     mytime_floor = round_datetime(
         mytime, secperiod=cfg["run_hour_delta"] * 60 * 60, method="floor"
     ).replace(tzinfo=None)
-    mytime_ceil = round_datetime(
-        mytime, secperiod=cfg["run_hour_delta"] * 60 * 60, method="ceil"
-    ).replace(tzinfo=None)
     # go back up to n_run_searches model runs
-    previous_range = [
+    file_range = [
         mytime_floor - datetime.timedelta(hours=cfg["run_hour_delta"] * x)
         for x in range(0, n_run_searches)
     ]
-    next_range = [
-        mytime_ceil + datetime.timedelta(hours=cfg["run_hour_delta"] * x)
-        for x in range(0, n_run_searches)
-    ]
-    file_range = previous_range + next_range
     # product of mydate, the within file time steps, and all the forecast hours for the run
     # ['model_run', 'forecast_time', 'within_file_time']
     cart = np.array(
@@ -146,7 +138,7 @@ def get_file_valid_times(
                 file_range,
                 [
                     datetime.timedelta(hours=x)
-                    for x in range(1, cfg["max_hour_fcst"] + 1)
+                    for x in range(0, cfg["max_hour_fcst"] + 1)
                 ],
                 cfg["within_file_timesteps"],
             )
@@ -184,6 +176,7 @@ def get_file_valid_times(
     )
     candidates["first"] = candidates["first"][ind]
     return candidates
+
 
 
 async def get_forecast_gribs(
