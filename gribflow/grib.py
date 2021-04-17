@@ -3,6 +3,7 @@ import ctypes
 import os
 import struct
 from ctypes.util import find_library
+import datetime
 
 import numpy as np
 
@@ -233,19 +234,32 @@ class FastGrib:
 
 
 def _read_headers(file, fgrib=FastGrib()):
-    '''
+    """
     Partial utility function to read headers of many grib files.
-    '''
+    """
     with open(file, "rb") as f:
         hdrs = fgrib.get_headers(f.read())
     return hdrs
 
 
 def _read_vals(file, fgrib=FastGrib()):
-    '''
+    """
     Partial utility function to read values of many grib files.
-    '''
+    """
     with open(file, "rb") as f:
         lats, lons, vals = fgrib.get_values(f.read())
     return vals
 
+
+def get_valid_time(validityDate, validityTime):
+    """
+    Parse valid date and time into datetime object.
+    """
+    validityDate = str(validityDate)
+    validityTime = f"{int(validityTime):04}"
+    yr = int(validityDate[:4])
+    mo = int(validityDate[4:6])
+    day = int(validityDate[6:8])
+    hour = int(validityTime[:2])
+    minute = int(validityTime[2:4])
+    return datetime.datetime(yr, mo, day, hour, minute)

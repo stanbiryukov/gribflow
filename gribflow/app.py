@@ -9,7 +9,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 
 from gribflow.flow import inpaint
-from gribflow.grib import _read_headers, _read_vals
+from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.io import get_models
 from gribflow.serve import (encode_array, from_epoch,
                             get_file_valid_times, get_forecast_gribs, get_tws,
@@ -54,8 +54,9 @@ async def get_data(
     tempdir = tempfile.mkdtemp()
 
     success = None
-    for i in range(0, 3):
+    for i in range(0, max_range):
         try:
+            print(f"loop {i}")
             # the datetime of the model + the forecast hour
             file_queries = (
                 candidates["first"][i, 0],
@@ -65,7 +66,6 @@ async def get_data(
                 int(candidates["last"][i, 1].total_seconds() / (60 * 60)),
             )
             file_queries = list(set(file_queries))
-
             grib_files = await get_forecast_gribs(
                 time_queries=file_queries,
                 model=model,
@@ -76,18 +76,16 @@ async def get_data(
                 forecast=forecast,
                 out_dir=tempdir,
             )
-
             # combine if multiple lists
             if any(isinstance(x, list) for x in grib_files):
                 grib_files = sum(grib_files, [])
-            # get hdrs
+            # get headers
             hdrs = [_read_headers(x) for x in grib_files]
+            # get valid times from headers
             hdrs_valid_times = [
-                datetime.datetime.strptime(f"{x[5]} {x[6]:02d}", "%Y%m%d %H%M")
+                get_valid_time(validityDate=x[5], validityTime=x[6])
                 for x in hdrs
             ]
-            # breaks here since deltas would be same!
-            # sort on delta
             lower = min(
                 [x for x in hdrs_valid_times if x < mytime.replace(tzinfo=None)],
                 key=lambda x: abs(x - mytime.replace(tzinfo=None)),
@@ -98,6 +96,7 @@ async def get_data(
                 key=lambda x: abs(x - mytime.replace(tzinfo=None)),
             )
             upper_delta = (upper - mytime.replace(tzinfo=None)).total_seconds()
+
             if best_lower_delta < lower_delta <= 0:
                 best_lower = lower
                 best_lower_delta = lower_delta
@@ -112,7 +111,7 @@ async def get_data(
         
         success = True
         break
-
+    
     if success is None:
         raise HTTPException(status_code=404, detail="Data not found")
 
