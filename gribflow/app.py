@@ -1,5 +1,3 @@
-import datetime
-import glob
 import re
 import shutil
 import tempfile
@@ -8,12 +6,11 @@ from typing import Optional
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from gribflow.flow import inpaint
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.io import get_models
-from gribflow.serve import (encode_array, from_epoch,
-                            get_file_valid_times, get_forecast_gribs, get_tws,
-                            interpolate, resize, to_epoch)
+from gribflow.serve import (encode_array, from_epoch, get_file_valid_times,
+                            get_forecast_gribs, get_tws, interpolate, resize,
+                            to_epoch)
 
 # instantiate app
 app = FastAPI()
@@ -42,7 +39,7 @@ async def get_data(
     mytime = from_epoch(epoch)
 
     # grab candidate files
-    candidates = get_file_valid_times(mytime=mytime, cfg=cfg, n_run_searches=96)
+    candidates = get_file_valid_times(mytime=mytime, cfg=cfg, n_run_searches=24)
     max_range = min(len(candidates["first"]), len(candidates["last"]))
 
     # initialize placeholders as we attempt to download most relevant files.
@@ -56,7 +53,7 @@ async def get_data(
     success = None
     for i in range(0, max_range):
         try:
-            print(f"loop {i}")
+
             # the datetime of the model + the forecast hour
             file_queries = (
                 candidates["first"][i, 0],
@@ -84,8 +81,7 @@ async def get_data(
             hdrs = [_read_headers(x) for x in grib_files]
             # get valid times from headers
             hdrs_valid_times = [
-                get_valid_time(validityDate=x[5], validityTime=x[6])
-                for x in hdrs
+                get_valid_time(validityDate=x[5], validityTime=x[6]) for x in hdrs
             ]
             lower = min(
                 [x for x in hdrs_valid_times if x < mytime.replace(tzinfo=None)],
@@ -109,12 +105,12 @@ async def get_data(
         except Exception as e:
             print(e)
             continue
-        
+
         success = True
         break
-    
+
     if success is None:
-        raise HTTPException(status_code=404, detail="Data not found")
+        raise HTTPException(status_code=404, detail=f"Data for {epoch} not found")
 
     # now get those matching grib files
     filelower = grib_files[hdrs_valid_times.index(best_lower)]
@@ -125,7 +121,7 @@ async def get_data(
 
     if epoch == to_epoch(best_lower):
         hat = x1
-    
+
     elif epoch == to_epoch(best_upper):
         hat = x2
 
