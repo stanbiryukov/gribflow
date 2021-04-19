@@ -119,7 +119,6 @@ def get_models():
             "base_urls": [
                 "https://noaa-hrrr-bdp-pds.s3.amazonaws.com",
                 "https://storage.googleapis.com/high-resolution-rapid-refresh",
-                "https://nomads.ncep.noaa.gov/pub/data/nccf/com/hrrr/prod",
             ],
             "products": {
                 "conus": {
@@ -200,6 +199,10 @@ async def get_gribs(
             r = await fetch(session, idx_url)
         if r is not None:
             break
+
+    if r is None:
+        raise aiohttp.ClientConnectionError()
+
     gribidx = read_idx(r)
     dlocs = get_byte_locs(
         gribidx=gribidx,
