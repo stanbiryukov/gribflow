@@ -7,7 +7,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
-from gribflow.io import get_models
+from gribflow.opendata import get_models
 from gribflow.serve import (encode_array, from_epoch, get_file_valid_times,
                             get_forecast_gribs, get_tws, interpolate, resize,
                             to_epoch)
