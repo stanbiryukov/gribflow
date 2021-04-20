@@ -119,17 +119,11 @@ async def get_data(
     x1 = _read_vals(filelower)
     x2 = _read_vals(fileupper)
 
-    if epoch == to_epoch(best_lower):
-        hat = x1
+    target_tw = get_tws(
+        target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
+    )
 
-    elif epoch == to_epoch(best_upper):
-        hat = x2
-
-    else:
-        target_tw = get_tws(
-            target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
-        )
-        hat = interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
+    hat = interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
 
     if xy:
         # parse size if provided and interpolate
@@ -145,6 +139,9 @@ async def get_data(
     return {
         "start_file": filelower,
         "end_file": fileupper,
+        "start_file_epoch": to_epoch(best_lower),
+        "end_file_epoch": to_epoch(best_upper),
+        "time_interpolation_weight": target_tw,
         "timestamp": mytime,
         "epoch": epoch,
         "shape": hat.shape,

@@ -59,8 +59,8 @@ def get_tws(target, start, end):
         ex:
         get_tws(target = 1617632280000, start = 1617632100000, end = 1617633000000)
     """
-    assert target > start
-    assert target < end
+    assert target >= start
+    assert target <= end
     epoch_delta = end - start
     return (target - start) / epoch_delta
 
