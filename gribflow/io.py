@@ -159,6 +159,26 @@ def get_models():
                 },
             },
         },
+        "rap": {
+            "url": "rap.{timestamp.year:04d}{timestamp.month:02d}{timestamp.day:02d}/rap.t{timestamp.hour:02d}z.{file}f{forecast_hour:02d}.grib2",
+            "base_urls": [
+                "https://noaa-rap-pds.s3.amazonaws.com",
+            ],
+            "products": {
+                "conus": {
+                    "files": {
+                        "awp130pgrb": {
+                            "run_hour_delta": 1,
+                            "fcst_hour_delta": 1,
+                            "max_hour_fcst": 21,
+                            "within_file_timesteps": [
+                                datetime.timedelta(hours=1),
+                            ],
+                        },
+                    },
+                },
+            },
+        }
     }
     return models
 
