@@ -8,9 +8,17 @@ from fastapi import FastAPI, HTTPException
 
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.opendata import get_models
-from gribflow.serve import (encode_array, from_epoch, get_file_valid_times,
-                            get_forecast_gribs, get_tws,
-                            lagrangian_interpolate, resize, to_epoch)
+from gribflow.serve import (
+    encode_array,
+    from_epoch,
+    get_file_valid_times,
+    get_forecast_gribs,
+    get_tws,
+    interpolate,
+    resize,
+    to_epoch,
+)
+from gribflow.transformers import get_transfomers
 
 # instantiate app
 app = FastAPI()
@@ -18,7 +26,7 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return get_models()
+    return {"Models": get_models(), "Transformers": get_transfomers()}
 
 
 @app.get("/data/{model}/{product}/{file}/{variable}/{level}/{forecast}/{epoch}")
@@ -30,6 +38,7 @@ async def get_data(
     variable: str,
     level: str,
     forecast: str,
+    transformer: Optional[str] = None,
     xy: Optional[str] = None,
     method: Optional[str] = "bicubic",
 ):
@@ -119,6 +128,11 @@ async def get_data(
     x1 = _read_vals(filelower)
     x2 = _read_vals(fileupper)
 
+    if transformer:
+        tcfg = get_transfomers()[transformer.lower()]
+        x1 = tcfg.fit_transform(x1)
+        x2 = tcfg.fit_transform(x2)
+
     if epoch == to_epoch(best_lower):
         hat = x1
 
@@ -130,7 +144,7 @@ async def get_data(
             target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
         )
         hat = np.stack(
-            lagrangian_interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
+            interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
         ).squeeze(axis=0)
 
     if xy:

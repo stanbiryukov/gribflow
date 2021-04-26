@@ -119,7 +119,7 @@ def lagrangian_interpolate(ar1, ar2, tws, flow_ar=None):
     """
     Interpolate frame for a requested slice between the two using semilagrangian scheme. Specific to app.py, so as to return just one time-weight slice.
         ex:
-        interpolate(ar1, ar2, tws=[.2])
+        lagrangian_interpolate(ar1, ar2, tws=[.2])
     """
     if flow_ar is None:
         armax = np.nanmax([ar1, ar2])

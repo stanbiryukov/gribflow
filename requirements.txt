@@ -11,4 +11,5 @@ jaxlib
 pandas
 Pillow
 python-dateutil
+scikit-learn
 uvicorn

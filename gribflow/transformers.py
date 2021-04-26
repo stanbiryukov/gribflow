@@ -1,48 +1,43 @@
-import numpy as np
+from sklearn.base import TransformerMixin
+
+from gribflow.utils import dbz_to_mmhr, mmhr_to_dbz
 
 
-def mmh_to_rfl(r, a=256.0, b=1.42):
+class prate_per_second_to_dbz(TransformerMixin):
     """
-    wradlib.zr.r2z function
+    Given precipitation rate as kg.m-2.s-1, convert to hourly dbz.
     """
-    return a * r ** b
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        return mmhr_to_dbz(X * 3600)
+
+    def inverse_transform(self, X):
+        return dbz_to_mmhr(X) / 3600
 
 
-def rfl_to_dbz(z):
+class per_second_to_hourly(TransformerMixin):
     """
-    wradlib.trafo.decibel function
+    Given rate data as per second, convert to hourly.
     """
-    return 10.0 * np.log10(z)
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        return X * 3600
+
+    def inverse_transform(self, X):
+        return X / 3600
 
 
-def dbz_to_rfl(d):
+def get_transfomers():
     """
-    wradlib.trafo.idecibel function
+    Expose usable transformer methods in a dictionary.
     """
-    return 10.0 ** (d / 10.0)
-
-
-def rfl_to_mmh(z, a=256.0, b=1.42):
-    """
-    wradlib.zr.z2r function
-    """
-    return (z / a) ** (1.0 / b)
-
-
-def mmhr_to_dbz(x, threshold=0.1):
-    X_rfl = mmh_to_rfl(x)
-    # reflectivity to dBz
-    X_rfl[X_rfl == 0] = 0.1  # set 0s to log10(.1) = -1
-    X_dbz = rfl_to_dbz(X_rfl)
-    X_dbz[~np.isfinite(X_dbz)] = 0
-    return X_dbz
-
-
-def dbz_to_mmhr(x, threshold=0.1):
-    X_rfl = dbz_to_rfl(x)
-    X_rfl[X_rfl == 1] = 0  # set 0 dbz
-    X_threshold = X_rfl <= threshold
-    X_mmh = rfl_to_mmh(X_rfl)
-    X_mmh[X_threshold] = 0
-    X_mmh[~np.isfinite(X_mmh)] = 0
-    return X_mmh
+    return {
+        "prate_per_second_to_dbz": prate_per_second_to_dbz(),
+        "per_second_to_hourly": per_second_to_hourly(),
+    }
