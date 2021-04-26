@@ -149,7 +149,6 @@ async def get_data(
         "end_file": fileupper,
         "start_file_epoch": to_epoch(best_lower),
         "end_file_epoch": to_epoch(best_upper),
-        "time_interpolation_weight": target_tw,
         "timestamp": mytime,
         "epoch": epoch,
         "shape": hat.shape,
