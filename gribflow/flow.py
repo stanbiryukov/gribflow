@@ -112,12 +112,7 @@ def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     I_result = []
     if tws is None:
         tws = np.arange(1, n + 1) / (n + 1)
-    for tw in tws:
-        I_result.append(
-            _interpolate_frames(
-                ts_weight=tw, XY=XY, I1=I1, I2=I2, flowF=flowF, flowB=flowB
-            )
-        )
+    [I_result.append(_interpolate_frames(ts_weight=tw, XY=XY, I1=I1, I2=I2, flowF=flowF, flowB=flowB)) for tw in tws]
     return I_result
 
 
