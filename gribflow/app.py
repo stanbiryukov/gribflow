@@ -9,8 +9,8 @@ from fastapi import FastAPI, HTTPException
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.opendata import get_models
 from gribflow.serve import (encode_array, from_epoch, get_file_valid_times,
-                            get_forecast_gribs, get_tws, interpolate, resize,
-                            to_epoch)
+                            get_forecast_gribs, get_tws,
+                            lagrangian_interpolate, resize, to_epoch)
 
 # instantiate app
 app = FastAPI()
@@ -119,11 +119,19 @@ async def get_data(
     x1 = _read_vals(filelower)
     x2 = _read_vals(fileupper)
 
-    target_tw = get_tws(
-        target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
-    )
+    if epoch == to_epoch(best_lower):
+        hat = x1
 
-    hat = interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
+    elif epoch == to_epoch(best_upper):
+        hat = x2
+
+    else:
+        target_tw = get_tws(
+            target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
+        )
+        hat = np.stack(
+            lagrangian_interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
+        ).squeeze(axis=0)
 
     if xy:
         # parse size if provided and interpolate

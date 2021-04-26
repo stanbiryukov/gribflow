@@ -12,7 +12,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gribflow.flow import calc_opt_flow, interpolate_frames, np_to_gray
+from gribflow.flow import (calc_opt_flow, interpolate_frames, np_to_gray,
+                           semilagrangian)
 from gribflow.io import get_gribs
 
 
@@ -102,7 +103,7 @@ def interpolate(ar1, ar2, tws, flow_ar=None):
     """
     Interpolate frame for a requested slice between the two.
         ex:
-        interpolate(ar1, ar2, tws=[.2, .5])
+        interpolate(ar1, ar2, tws=[.2, .4])
     """
     if flow_ar is None:
         armax = np.nanmax([ar1, ar2])
@@ -111,7 +112,24 @@ def interpolate(ar1, ar2, tws, flow_ar=None):
         gray2 = np_to_gray(ar2, floor=armin, ceil=armax)
         flow_ar = calc_opt_flow(gray1, gray2)
     hat = interpolate_frames(ar1, ar2, flow_ar, tws=tws)
-    return jnp.stack(hat).squeeze(axis=0)
+    return hat
+
+
+def lagrangian_interpolate(ar1, ar2, tws, flow_ar=None):
+    """
+    Interpolate frame for a requested slice between the two using semilagrangian scheme. Specific to app.py, so as to return just one time-weight slice.
+        ex:
+        interpolate(ar1, ar2, tws=[.2])
+    """
+    if flow_ar is None:
+        armax = np.nanmax([ar1, ar2])
+        armin = np.nanmin([ar1, ar2])
+        gray1 = np_to_gray(ar1, floor=armin, ceil=armax)
+        gray2 = np_to_gray(ar2, floor=armin, ceil=armax)
+        flow_ar = calc_opt_flow(gray1, gray2)
+    I_result = []
+    [I_result.append(semilagrangian(ar1, flow_ar, t=tw)) for tw in tws]
+    return I_result
 
 
 def resize(jar, shape, method="bicubic"):
@@ -124,7 +142,9 @@ def get_file_valid_times(
     # round provided time to nearest run file.
     cdatetime = datetime.datetime.utcnow()
     mytime_floor = round_datetime(
-        min([cdatetime.replace(tzinfo=None), mytime.replace(tzinfo=None)]), secperiod=cfg["run_hour_delta"] * 60 * 60, method="floor"
+        min([cdatetime.replace(tzinfo=None), mytime.replace(tzinfo=None)]),
+        secperiod=cfg["run_hour_delta"] * 60 * 60,
+        method="floor",
     ).replace(tzinfo=None)
     # go back up to n_run_searches model runs
     file_range = [
@@ -177,7 +197,6 @@ def get_file_valid_times(
     )
     candidates["first"] = candidates["first"][ind]
     return candidates
-
 
 
 async def get_forecast_gribs(
