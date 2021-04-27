@@ -5,7 +5,9 @@ from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from scipy.interpolate import interp1d
 
+from gribflow.flow import mm_scale
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.opendata import get_models
 from gribflow.serve import (
@@ -27,6 +29,12 @@ app = FastAPI()
 @app.get("/")
 def read_root():
     return {"Models": get_models(), "Transformers": get_transfomers()}
+
+
+# tanh space global function
+xx = np.linspace(0, 1, 100)
+tws = mm_scale(np.tanh(xx), floor=0, ceil=1)
+f = interp1d(xx, tws, kind="cubic", fill_value="extrapolate")
 
 
 @app.get("/data/{model}/{product}/{file}/{variable}/{level}/{forecast}/{epoch}")
@@ -93,7 +101,7 @@ async def get_data(
                 get_valid_time(validityDate=x[5], validityTime=x[6]) for x in hdrs
             ]
             lower = min(
-                [x for x in hdrs_valid_times if x < mytime.replace(tzinfo=None)],
+                [x for x in hdrs_valid_times if x <= mytime.replace(tzinfo=None)],
                 key=lambda x: abs(x - mytime.replace(tzinfo=None)),
             )
             lower_delta = (lower - mytime.replace(tzinfo=None)).total_seconds()
@@ -133,19 +141,13 @@ async def get_data(
         x1 = tcfg.fit_transform(x1)
         x2 = tcfg.fit_transform(x2)
 
-    if epoch == to_epoch(best_lower):
-        hat = x1
+    target_tw = get_tws(
+        target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
+    )
 
-    elif epoch == to_epoch(best_upper):
-        hat = x2
-
-    else:
-        target_tw = get_tws(
-            target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
-        )
-        hat = np.stack(
-            interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None)
-        ).squeeze(axis=0)
+    hat = np.stack(
+        interpolate(ar1=x1, ar2=x2, tws=[f(target_tw)], flow_ar=None, mode="disflow")
+    ).squeeze(axis=0)
 
     if xy:
         # parse size if provided and interpolate

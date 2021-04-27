@@ -19,7 +19,10 @@ def np_to_gray(ar, floor, ceil):
     return gray1
 
 
-def gray_to_np(ar, floor, ceil):
+def mm_scale(ar, floor, ceil):
+    '''
+    Simple MinMax Scale. Rescale array to floor-ceil space.
+    '''
     ar = (ar - np.nanmin(ar)) / (np.nanmax(ar) - np.nanmin(ar))
     ar = ((ceil - floor) * ar) + floor
     return ar
@@ -31,7 +34,7 @@ def inpaint(ar):
     gray = np_to_gray(ar, floor=ar_floor, ceil=ar_ceil)
     mask = (~np.isfinite(ar)*255).astype(np.uint8)
     out = cv2.inpaint(gray, mask, 3, cv2.INPAINT_TELEA)
-    out = gray_to_np(out, floor=ar_floor, ceil=ar_ceil)
+    out = mm_scale(out, floor=ar_floor, ceil=ar_ceil)
     return out
 
 
