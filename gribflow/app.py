@@ -31,12 +31,6 @@ def read_root():
     return {"Models": get_models(), "Transformers": get_transfomers()}
 
 
-# tanh space global function
-xx = np.linspace(0, 1, 100)
-tws = mm_scale(np.tanh(xx), floor=0, ceil=1)
-f = interp1d(xx, tws, kind="cubic", fill_value="extrapolate")
-
-
 @app.get("/data/{model}/{product}/{file}/{variable}/{level}/{forecast}/{epoch}")
 async def get_data(
     epoch: int,
@@ -141,13 +135,19 @@ async def get_data(
         x1 = tcfg.fit_transform(x1)
         x2 = tcfg.fit_transform(x2)
 
-    target_tw = get_tws(
-        target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
-    )
+    if epoch == to_epoch(best_lower):
+        hat = x1
 
-    hat = np.stack(
-        interpolate(ar1=x1, ar2=x2, tws=[f(target_tw)], flow_ar=None, mode="disflow")
-    ).squeeze(axis=0)
+    elif epoch == to_epoch(best_upper):
+        hat = x2
+
+    else:
+        target_tw = get_tws(
+            target=epoch, start=to_epoch(best_lower), end=to_epoch(best_upper)
+        )
+        hat = np.stack(
+            interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None, mode="disflow")
+        ).squeeze(axis=0)
 
     if xy:
         # parse size if provided and interpolate

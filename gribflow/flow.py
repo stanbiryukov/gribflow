@@ -20,19 +20,44 @@ def np_to_gray(ar, floor, ceil):
 
 
 def mm_scale(ar, floor, ceil):
-    '''
+    """
     Simple MinMax Scale. Rescale array to floor-ceil space.
-    '''
+        ie: convert gray scale array back to original space.
+    """
     ar = (ar - np.nanmin(ar)) / (np.nanmax(ar) - np.nanmin(ar))
     ar = ((ceil - floor) * ar) + floor
     return ar
+
+
+def masked_blend(x1, x2, weights):
+    """
+    Numpy NaN masked weighted average.
+    """
+    x1m = np.ma.MaskedArray(x1, mask=~np.isfinite(x1))
+    x2m = np.ma.MaskedArray(x2, mask=~np.isfinite(x2))
+    es = np.ma.average([x1m, x2m], weights=weights, axis=0).filled(np.nan)
+    return es
+
+
+@jit
+def geometric_blend(x1, x2, weights):
+    """
+    geometric mean of two arrays where non-finites (ie log(0)) are replaced with arithmetic mean
+    """
+    x1m = jnp.log(x1)
+    x2m = jnp.log(x2)
+    es = jnp.average([x1m, x2m], weights=weights, axis=0)  # es has -inf here.
+    av = jnp.average([x1, x2], weights=weights, axis=0)  # take average in normal space
+    esout = jnp.exp(es)
+    esout = jnp.where(~jnp.isfinite(es), av, esout)  # replace
+    return esout
 
 
 def inpaint(ar):
     ar_floor = np.nanmin(ar)
     ar_ceil = np.nanmax(ar)
     gray = np_to_gray(ar, floor=ar_floor, ceil=ar_ceil)
-    mask = (~np.isfinite(ar)*255).astype(np.uint8)
+    mask = (~np.isfinite(ar) * 255).astype(np.uint8)
     out = cv2.inpaint(gray, mask, 3, cv2.INPAINT_TELEA)
     out = mm_scale(out, floor=ar_floor, ceil=ar_ceil)
     return out
@@ -82,17 +107,18 @@ def _interpolate_frames(ts_weight, XY, I1, I2, flowF, flowB):
     I2_warped = jnp.reshape(
         jndi.map_coordinates(I2, XYW, order=1, mode="constant", cval=jnp.nan), I2.shape
     )
-    return (1.0 - ts_weight) * I1_warped + ts_weight * I2_warped
+    # weighted geometric mean
+    return geometric_blend(I1_warped, I2_warped, weights=[1 - ts_weight, ts_weight])
 
 
 def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     """
-    Interpolate frames between two images using forward and backward 
+    Interpolate frames between two images using forward and backward
     motion fields, flowF and flowB, respectively, computed from two images.
     Defaults to 5 equally spaced linear weights between frames.
     If tws, the time weights, are specified, only computes those.
     Inspired by pyoptflow.
-    
+
     Parameters
     ----------
     I1: array
@@ -115,7 +141,16 @@ def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     I_result = []
     if tws is None:
         tws = np.arange(1, n + 1) / (n + 1)
-    [I_result.append(_interpolate_frames(ts_weight=tw, XY=XY, I1=I1, I2=I2, flowF=flowF, flowB=flowB)) for tw in tws]
+    [
+        I_result.append(
+            np.array(
+                _interpolate_frames(
+                    ts_weight=tw, XY=XY, I1=I1, I2=I2, flowF=flowF, flowB=flowB
+                )
+            )
+        )
+        for tw in tws
+    ]
     return I_result
 
 
@@ -144,7 +179,7 @@ def semilagrangian(I1, flow, t, n_steps=1, n_iter=3, inverse=True):
     """
     Apply semi-Lagrangian extrapolation to an image by using a motion field.
     Inspired by pyoptflow.
-    
+
     Parameters
     ----------
     I1: array
