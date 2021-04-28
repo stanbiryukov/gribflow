@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
     Examples
     ----------
-        python3 io.py -model 'hrrr' -product 'conus' -file 'wrfsubhf' -timestamp '2021-04-11 11:00:00' -forecast_hour 1 -variable 'PRATE' -level 'surface' -forecast 'minfcst' -out_dir '/tmp'
+        python3 io.py -model 'hrrr' -product 'conus' -file 'wrfsubh' -timestamp '2021-04-11 11:00:00' -forecast_hour 1 -variable 'PRATE' -level 'surface' -forecast 'minfcst' -out_dir '/tmp'
         python3 io.py -model 'gfs' -product 'atmos' -file 'pgrb2.0p25' -timestamp '2021-04-11 12:00:00' -forecast_hour 6 -variable 'TMP' -level 'surface' -forecast 'hourfcst' -out_dir '/tmp'
     """
     parser = argparse.ArgumentParser(description="Grib downloader")
