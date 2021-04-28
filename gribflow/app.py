@@ -5,9 +5,7 @@ from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
-from scipy.interpolate import interp1d
 
-from gribflow.flow import mm_scale
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.opendata import get_models
 from gribflow.serve import (
