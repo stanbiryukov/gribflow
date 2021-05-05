@@ -65,11 +65,14 @@ async def get_data(
 
             # the datetime of the model + the forecast hour
             file_queries = (
-                candidates["first"][i, 0],
-                int(candidates["first"][i, 1].total_seconds() / (60 * 60)),
-            ), (
-                candidates["last"][i, 0],
-                int(candidates["last"][i, 1].total_seconds() / (60 * 60)),
+                (
+                    candidates["first"][i, 0],
+                    int(candidates["first"][i, 1].total_seconds() / (60 * 60)),
+                ),
+                (
+                    candidates["last"][i, 0],
+                    int(candidates["last"][i, 1].total_seconds() / (60 * 60)),
+                ),
             )
             file_queries = list(set(file_queries))
 

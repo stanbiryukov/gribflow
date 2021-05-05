@@ -36,8 +36,7 @@ class FastGrib:
     """
 
     def __init__(
-        self,
-        libeccodes_loc=None,
+        self, libeccodes_loc=None,
     ):
         self.libeccodes_loc = (
             self.find_eccodes() if libeccodes_loc is None else libeccodes_loc

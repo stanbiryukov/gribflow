@@ -111,6 +111,7 @@ def _interpolate_frames(ts_weight, XY, I1, I2, flowF, flowB):
     return geometric_blend(I1_warped, I2_warped, weights=[1 - ts_weight, ts_weight])
 
 
+@jit
 def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     """
     Interpolate frames between two images using forward and backward
@@ -136,17 +137,15 @@ def interpolate_frames(I1, I2, flowF, flowB=None, n=5, tws=None):
     """
     if flowB == None:
         flowB = -flowF
-    X, Y = jnp.meshgrid(np.arange(np.size(I1, 1)), jnp.arange(jnp.size(I1, 0)))
+    X, Y = jnp.meshgrid(jnp.arange(jnp.size(I1, 1)), jnp.arange(jnp.size(I1, 0)))
     XY = jnp.dstack([X, Y])
     I_result = []
     if tws is None:
-        tws = np.arange(1, n + 1) / (n + 1)
+        tws = jnp.arange(1, n + 1) / (n + 1)
     [
         I_result.append(
-            np.array(
-                _interpolate_frames(
-                    ts_weight=tw, XY=XY, I1=I1, I2=I2, flowF=flowF, flowB=flowB
-                )
+            _interpolate_frames(
+                ts_weight=tw, XY=XY, I1=I1, I2=I2, flowF=flowF, flowB=flowB
             )
         )
         for tw in tws
@@ -175,6 +174,7 @@ def _semilagrangian(XY, delta_t, flow_tot, flow_inc, flow):
     return flow_inc
 
 
+@jit
 def semilagrangian(I1, flow, t, n_steps=1, n_iter=3, inverse=True):
     """
     Apply semi-Lagrangian extrapolation to an image by using a motion field.

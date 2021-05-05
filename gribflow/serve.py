@@ -9,10 +9,10 @@ from typing import Optional
 
 import blosc
 import jax
+import jax.numpy as jnp
 import numpy as np
 
-from gribflow.flow import (calc_opt_flow, interpolate_frames, np_to_gray,
-                           semilagrangian)
+from gribflow.flow import calc_opt_flow, interpolate_frames, np_to_gray, semilagrangian
 from gribflow.io import get_gribs
 
 
@@ -101,7 +101,7 @@ def decode_array(cdata, shape, compressor=blosc.decompress):
     return data
 
 
-def interpolate(ar1, ar2, tws, flow_ar=None, mode='deepflow'):
+def interpolate(ar1, ar2, tws, flow_ar=None, mode="disflow"):
     """
     Interpolate frame for a requested slice between the two.
         ex:
@@ -117,7 +117,7 @@ def interpolate(ar1, ar2, tws, flow_ar=None, mode='deepflow'):
     return hat
 
 
-def lagrangian_interpolate(ar1, ar2, tws, flow_ar=None, mode='deepflow'):
+def lagrangian_interpolate(ar1, ar2, tws, flow_ar=None, mode="disflow"):
     """
     Interpolate frame for a requested slice between the two using semilagrangian scheme. Specific to app.py, so as to return just one time-weight slice.
         ex:
