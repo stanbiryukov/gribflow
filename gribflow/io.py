@@ -5,7 +5,9 @@ import re
 
 import aiohttp
 
+from aiohttp_client_cache import CachedSession, SQLiteBackend
 from gribflow.opendata import get_models
+from memoization import cached
 
 
 async def fetch(session, url):
@@ -37,7 +39,7 @@ def create_grib_idx_url_path(
     # print(f"{baseurl}/{url}.idx")
     return f"{baseurl}/{url}.idx"
 
-
+@cached(max_size=128)
 def read_idx(response):
     """
     Read grib index file as list and insert row number into beginning
@@ -80,7 +82,10 @@ def get_byte_ranges(dlocs: list, gribidx: list):
 async def make_request(url, path, _range):
     header = {"Range": f"bytes={_range}"}
     # print(f"Fetching {url} to {path}")
-    async with aiohttp.ClientSession(headers=header) as session:
+    async with CachedSession(
+        cache=SQLiteBackend("make_request_cache", include_headers=True), headers=header
+    ) as session:
+
         async with session.get(url=url) as resp:
             with open(path, "wb") as f:
                 async for chunk in resp.content.iter_chunked(4096):
@@ -146,7 +151,7 @@ async def get_gribs(
             timestamp=datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S"),
             forecast_hour=forecast_hour,
         )
-        async with aiohttp.ClientSession() as session:
+        async with CachedSession(cache=SQLiteBackend("get_gribs_cache")) as session:
             r = await fetch(session, idx_url)
         if r is not None:
             break
@@ -156,10 +161,7 @@ async def get_gribs(
 
     gribidx = read_idx(r)
     dlocs = get_byte_locs(
-        gribidx=gribidx,
-        variable=variable,
-        level=level,
-        forecast=forecast,
+        gribidx=gribidx, variable=variable, level=level, forecast=forecast,
     )
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
     results = await download_files(
@@ -212,11 +214,7 @@ if __name__ == "__main__":
         help="forecast hour of model run to query",
     )
     parser.add_argument(
-        "-variable",
-        default="PRATE",
-        type=str,
-        required=True,
-        help="variable to query",
+        "-variable", default="PRATE", type=str, required=True, help="variable to query",
     )
     parser.add_argument(
         "-level",
