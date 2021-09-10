@@ -6,7 +6,6 @@ from jax import jit
 from PIL import Image
 
 import cv2
-from memoization import cached
 
 
 def np_to_gray(ar, floor, ceil):
@@ -55,7 +54,6 @@ def geometric_blend(x1, x2, weights):
     return esout
 
 
-@cached(max_size=128)
 def inpaint(ar):
     ar_floor = np.nanmin(ar)
     ar_ceil = np.nanmax(ar)
@@ -66,7 +64,6 @@ def inpaint(ar):
     return out
 
 
-@cached(max_size=128)
 def calc_opt_flow(gray1, gray2, mode="disflow"):
     flow = None
     if mode == "franeback":

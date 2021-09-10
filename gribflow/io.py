@@ -7,7 +7,6 @@ import re
 import aiohttp
 
 from gribflow.opendata import get_models
-from memoization import cached
 
 
 async def fetch(session, url):
@@ -39,7 +38,6 @@ def create_grib_idx_url_path(
     return f"{baseurl}/{url}.idx"
 
 
-@cached(max_size=128)
 def read_idx(response):
     """
     Read grib index file as list and insert row number into beginning
