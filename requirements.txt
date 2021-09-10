@@ -3,7 +3,7 @@ aiohttp==4.0.0a1
 aiosqlite==0.17.0
 asyncio==3.4.3
 blosc==1.10.2
-fastapi==0.62.0
+fastapi==0.65.2
 gunicorn==20.0.4
 jax==0.2.13
 jaxlib==0.1.65
