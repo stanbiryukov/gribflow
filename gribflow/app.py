@@ -40,7 +40,7 @@ async def get_data(
     level: str,
     forecast: str,
     transformer: Optional[str] = None,
-    inpainting: Optional[bool] = False,
+    inpainting: Optional[str] = None,
     xy: Optional[str] = None,
     method: Optional[str] = "bicubic",
 ):
@@ -152,6 +152,9 @@ async def get_data(
             interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None, mode="disflow")
         ).squeeze(axis=0)
 
+    # cast to numpy array
+    hat = np.array(hat)
+
     if inpainting:
         hat = inpaint(hat)
 
@@ -160,7 +163,7 @@ async def get_data(
         x, y = re.findall(r"\d+", xy)
         x, y = int(x), int(y)
         # fillnans as jax does not like interpolating with them
-        hat = resize(np.nan_to_num(np.array(hat)), shape=(y, x), method=method)
+        hat = resize(np.nan_to_num(hat), shape=(y, x), method=method)
 
     shutil.rmtree(tempdir)
 

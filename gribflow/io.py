@@ -140,7 +140,6 @@ async def get_gribs(
             timestamp=datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S"),
             forecast_hour=forecast_hour,
         )
-        print(idx_url)
         async with aiohttp.ClientSession() as session:
             r = await fetch(session, idx_url)
         if r is not None:
