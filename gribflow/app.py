@@ -4,8 +4,9 @@ import tempfile
 from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
 
+from fastapi import FastAPI, HTTPException
+from gribflow.flow import inpaint
 from gribflow.grib import _read_headers, _read_vals, get_valid_time
 from gribflow.opendata import get_models
 from gribflow.serve import (
@@ -39,6 +40,7 @@ async def get_data(
     level: str,
     forecast: str,
     transformer: Optional[str] = None,
+    inpainting: Optional[bool] = False,
     xy: Optional[str] = None,
     method: Optional[str] = "bicubic",
 ):
@@ -149,6 +151,9 @@ async def get_data(
         hat = np.stack(
             interpolate(ar1=x1, ar2=x2, tws=[target_tw], flow_ar=None, mode="disflow")
         ).squeeze(axis=0)
+
+    if inpainting:
+        hat = inpaint(hat)
 
     if xy:
         # parse size if provided and interpolate
