@@ -12,8 +12,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gribflow.flow import calc_opt_flow, interpolate_frames, np_to_gray, semilagrangian
+from gribflow.flow import (calc_opt_flow, interpolate_frames, np_to_gray,
+                           semilagrangian)
 from gribflow.io import get_gribs
+from memoization import cached
 
 
 def to_epoch(x: datetime):
@@ -101,6 +103,7 @@ def decode_array(cdata, shape, compressor=blosc.decompress):
     return data
 
 
+@cached(max_size=128)
 def interpolate(ar1, ar2, tws, flow_ar=None, mode="disflow"):
     """
     Interpolate frame for a requested slice between the two.
@@ -117,6 +120,7 @@ def interpolate(ar1, ar2, tws, flow_ar=None, mode="disflow"):
     return hat
 
 
+@cached(max_size=128)
 def lagrangian_interpolate(ar1, ar2, tws, flow_ar=None, mode="disflow"):
     """
     Interpolate frame for a requested slice between the two using semilagrangian scheme. Specific to app.py, so as to return just one time-weight slice.
@@ -134,10 +138,12 @@ def lagrangian_interpolate(ar1, ar2, tws, flow_ar=None, mode="disflow"):
     return I_result
 
 
+@cached(max_size=128)
 def resize(jar, shape, method="bicubic"):
     return jax.image.resize(jar, shape=shape, method=method)
 
 
+@cached(max_size=128)
 def get_file_valid_times(
     mytime: datetime, cfg: dict, n_run_searches: Optional[int] = 96
 ):

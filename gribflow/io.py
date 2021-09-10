@@ -1,11 +1,13 @@
 import argparse
 import asyncio
 import datetime
+import os
 import re
 
 import aiohttp
 
 from gribflow.opendata import get_models
+from memoization import cached
 
 
 async def fetch(session, url):
@@ -34,10 +36,10 @@ def create_grib_idx_url_path(
     url = url.format(
         timestamp=timestamp, product=product, file=file, forecast_hour=forecast_hour
     )
-    # print(f"{baseurl}/{url}.idx")
     return f"{baseurl}/{url}.idx"
 
 
+@cached(max_size=128)
 def read_idx(response):
     """
     Read grib index file as list and insert row number into beginning
@@ -94,17 +96,11 @@ async def download_files(
     """
     Create aiohttp requests for all the grib chunks.
     """
-    path_base = (
-        "".join(idx_url.partition(model.lower())[1:])
-        .replace("/", "")
-        .replace("idx", "")
-        .split(".grib", 1)[0]
-    )
     tasks = [
         asyncio.create_task(
             make_request(
                 url=idx_url.replace(".idx", ""),
-                path=f"{out_dir}/{path_base}_{gribidx[x[0]][4].replace(' ', '_').strip()}_{gribidx[x[0]][5].replace(' ', '_').strip() }_{gribidx[x[0]][6].replace(' ', '_').strip() }.grib2",
+                path=f"{out_dir}/{os.path.basename(idx_url.replace('.idx', '').replace('.grib2', ''))}.grib2",
                 _range=f"{x[1][0]}-{x[1][1]}",
             )
         )
@@ -146,6 +142,7 @@ async def get_gribs(
             timestamp=datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S"),
             forecast_hour=forecast_hour,
         )
+        print(idx_url)
         async with aiohttp.ClientSession() as session:
             r = await fetch(session, idx_url)
         if r is not None:
@@ -156,10 +153,7 @@ async def get_gribs(
 
     gribidx = read_idx(r)
     dlocs = get_byte_locs(
-        gribidx=gribidx,
-        variable=variable,
-        level=level,
-        forecast=forecast,
+        gribidx=gribidx, variable=variable, level=level, forecast=forecast,
     )
     dranges = get_byte_ranges(dlocs=dlocs, gribidx=gribidx)
     results = await download_files(
@@ -212,11 +206,7 @@ if __name__ == "__main__":
         help="forecast hour of model run to query",
     )
     parser.add_argument(
-        "-variable",
-        default="PRATE",
-        type=str,
-        required=True,
-        help="variable to query",
+        "-variable", default="PRATE", type=str, required=True, help="variable to query",
     )
     parser.add_argument(
         "-level",
